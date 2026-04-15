@@ -3,8 +3,8 @@ idf_component_register(
         "main.cpp"
         "MSM_CAN/MSM_CAN.cpp"
         "tasks/can_task/can_task.cpp"
-        "tasks/shifter_task/shifter_task.cpp"
-        "tasks/system_task/system_task.cpp"
+        "tasks/gear_safety_task/gear_safety_task.cpp"
+        "tasks/gear_safety_task/shift_inputs.cpp"
     PRIV_REQUIRES
         freertos
         log
@@ -16,6 +16,5 @@ idf_component_register(
         "."
         "MSM_CAN"
         "tasks/can_task"
-        "tasks/shifter_task"
-        "tasks/system_task"
+        "tasks/gear_safety_task"
 )

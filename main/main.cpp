@@ -1,10 +1,11 @@
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "can_task.hpp"
-#include "shifter_task.hpp"
+#include "gear_safety_task.hpp"
 
 static const char *TAG_SYS = "SYSTEM";
 
@@ -22,6 +23,7 @@ extern "C" void app_main(void)
     }
 
     ESP_LOGI(TAG_SYS, "Mutexes created succesfully!");
+
     ESP_LOGI(TAG_SYS, "Creating tasks");
 
 
@@ -29,10 +31,10 @@ extern "C" void app_main(void)
     bool success = true;
     
     ok = xTaskCreate(can_task, "can_task", 4096, nullptr, 1, nullptr);
-    if(ok != pdPass){success = false;}
+    if(ok != pdPASS){success = false;}
     
-    xTaskCreate(shifter_task, "shifter_task", 4096, nullptr, 2, nullptr);
-    if(ok != pdPass){success = false;}
+    ok = xTaskCreate(gear_safety_task, "gear_safety_task", 4096, nullptr, 2, nullptr);
+    if(ok != pdPASS){success = false;}
     
     if(!success){
         ESP_LOGE(TAG_SYS, "Task creation failed!");
@@ -42,6 +44,6 @@ extern "C" void app_main(void)
 
     ESP_LOGI(TAG_SYS, "Tasks created succesfully!");
     ESP_LOGI(TAG_SYS, "Goodbye World");
-    
+
     vTaskDelete(NULL);
 }

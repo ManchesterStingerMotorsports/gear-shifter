@@ -5,8 +5,6 @@
 
 #include "esp_log.h"
 
-constexpr uint32_t SHIFTER_TASK_PERIOD_MS = 20;
-
 static const char *TAG = "SHIFTER_TASK";
 
 void shifter_task(void *arg)
@@ -16,6 +14,6 @@ void shifter_task(void *arg)
 
     for (;;)
     {
-        vTaskDelay(pdMS_TO_TICKS(SHIFTER_TASK_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

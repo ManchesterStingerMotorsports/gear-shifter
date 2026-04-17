@@ -11,10 +11,12 @@ idf_component_register(
         spi_flash
         esp_driver_twai
         esp_driver_gpio
+        esp_driver_ledc
         esp_timer
     INCLUDE_DIRS
         "."
         "MSM_CAN"
+        "esc"
         "tasks/can_task"
         "tasks/gear_safety_task"
 )

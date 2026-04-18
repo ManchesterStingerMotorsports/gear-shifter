@@ -50,6 +50,8 @@ Before commanding the ESC, the gear safety task checks:
 
 If any check fails, the ESC is commanded to zero torque and the shift is rejected.
 
+If the ECU gear packet is fresh but disagrees with the internal gear count, the current shift is still rejected, but the internal gear count is resynchronised to the ECU gear before the next request is accepted.
+
 
 ## Encoder
 
@@ -149,4 +151,3 @@ Hardware/                   KiCad hardware files
 Archive Python Code/        earlier prototype scripts
 ESC Settings/               ESC configuration files
 ```
-

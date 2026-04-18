@@ -165,6 +165,31 @@ static void report_rejected_shift(ShiftRequest request)
     ESP_LOGW(TAG_GEAR_SAFETY, "Shift rejected: %s", shift_request_to_string(request));
 }
 
+static bool gear_count_matches_fresh_ecu_snapshot(const GearSnapshot &ecu_gear,
+                                                  bool ecu_gear_is_stale,
+                                                  gear_t gear_count)
+{
+    return !ecu_gear_is_stale && ecu_gear.gear == gear_count;
+}
+
+static bool resync_gear_count_from_ecu_if_mismatched(const GearSnapshot &ecu_gear,
+                                                     bool ecu_gear_is_stale,
+                                                     gear_t &gear_count)
+{
+    if (ecu_gear_is_stale || ecu_gear.gear == gear_count)
+    {
+        return false;
+    }
+
+    ESP_LOGW(TAG_GEAR_SAFETY,
+             "Internal gear count resynced from ECU: internal=%d ecu=%d",
+             static_cast<int>(gear_count),
+             static_cast<int>(ecu_gear.gear));
+
+    gear_count = ecu_gear.gear;
+    return true;
+}
+
 // Update the internal gear count after a confirmed successful shift. This is
 // intentionally separate from the actuation code so the rule is easy to audit.
 static gear_t gear_after_successful_shift(ShiftRequest request, gear_t gear_count)
@@ -221,7 +246,8 @@ void gear_safety_task(void *arg)
             ecu_gear_snapshot_is_stale(ecu_gear, now_ms, ECU_GEAR_MAX_AGE_MS);
 
         const bool shift_is_in_range = requested_shift_is_in_range(request, gear_count);
-        const bool ecu_matches_internal_count = (!ecu_gear_is_stale && ecu_gear.gear == gear_count);
+        const bool ecu_matches_internal_count =
+            gear_count_matches_fresh_ecu_snapshot(ecu_gear, ecu_gear_is_stale, gear_count);
 
         uint16_t encoder_position = 0;
         const bool encoder_read_ok = encoder.read_position(encoder_position);
@@ -229,14 +255,18 @@ void gear_safety_task(void *arg)
 
         if (!precheck_passed)
         {
+            const bool resynced_gear_count =
+                resync_gear_count_from_ecu_if_mismatched(ecu_gear, ecu_gear_is_stale, gear_count);
+
             esc.set_torque(0.0f);
             ESP_LOGW(TAG_GEAR_SAFETY,
-                     "Precheck failed: in_range=%d ecu_fresh=%d ecu=%d internal=%d encoder_ok=%d",
+                     "Precheck failed: in_range=%d ecu_fresh=%d ecu=%d internal=%d encoder_ok=%d resynced=%d",
                      static_cast<int>(shift_is_in_range),
                      static_cast<int>(!ecu_gear_is_stale),
                      static_cast<int>(ecu_gear.gear),
                      static_cast<int>(gear_count),
-                     static_cast<int>(encoder_read_ok));
+                     static_cast<int>(encoder_read_ok),
+                     static_cast<int>(resynced_gear_count));
             report_rejected_shift(request);
             clear_and_enable_shift_inputs();
             continue;

@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -55,6 +56,12 @@ static const uint16_t SHIFT_NEUTRAL_FROM_1_STOP_POSITION = 0;
 static const uint16_t SHIFT_NEUTRAL_FROM_2_STOP_POSITION = 0;
 static const uint16_t SHIFT_POSITION_TOLERANCE = 20;
 
+enum class ShiftPositionStatus
+{
+    NotReached,
+    Reached,
+    ReadFault,
+};
 
 static const char *shift_request_to_string(ShiftRequest request)
 {
@@ -140,17 +147,31 @@ static uint16_t target_position_for_shift_request(ShiftRequest request, gear_t g
 // Polling hook used during the shift actuation window. It must be fast and
 // non-blocking because the high-priority shift task spins on this until success
 // or timeout.
-static bool shifted_position_reached(ShiftRequest request, gear_t gear_count)
+static ShiftPositionStatus shifted_position_status(ShiftRequest request, gear_t gear_count)
 {
     uint16_t position = 0;
     if (!encoder.read_position(position))
     {
-        return false;
+        ESP_LOGE(TAG_GEAR_SAFETY,
+                 "Encoder read failed while checking shift position: request=%s gear=%d",
+                 shift_request_to_string(request),
+                 static_cast<int>(gear_count));
+        return ShiftPositionStatus::ReadFault;
     }
 
-    return AMT20::position_is_near(position,
-                                   target_position_for_shift_request(request, gear_count),
-                                   SHIFT_POSITION_TOLERANCE);
+    const uint16_t target = target_position_for_shift_request(request, gear_count);
+    if (AMT20::position_is_near(position, target, SHIFT_POSITION_TOLERANCE))
+    {
+        ESP_LOGI(TAG_GEAR_SAFETY,
+                 "Shift target reached: request=%s position=%u target=%u tolerance=%u",
+                 shift_request_to_string(request),
+                 static_cast<unsigned>(position),
+                 static_cast<unsigned>(target),
+                 static_cast<unsigned>(SHIFT_POSITION_TOLERANCE));
+        return ShiftPositionStatus::Reached;
+    }
+
+    return ShiftPositionStatus::NotReached;
 }
 
 
@@ -181,9 +202,10 @@ static bool resync_gear_count_from_ecu_if_mismatched(const GearSnapshot &ecu_gea
         return false;
     }
 
+    const gear_t old_gear_count = gear_count;
     ESP_LOGW(TAG_GEAR_SAFETY,
              "Internal gear count resynced from ECU: internal=%d ecu=%d",
-             static_cast<int>(gear_count),
+             static_cast<int>(old_gear_count),
              static_cast<int>(ecu_gear.gear));
 
     gear_count = ecu_gear.gear;
@@ -219,7 +241,14 @@ void gear_safety_task(void *arg)
     esc.set_torque(0.0f); //constructor already sets torque to 0 but its best to be explicit
 
     // Register the shift input GPIO ISRs
-    setup_shift_inputs(xTaskGetCurrentTaskHandle());
+    esp_err_t err = setup_shift_inputs(xTaskGetCurrentTaskHandle());
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_GEAR_SAFETY, "Shift input setup failed: %s", esp_err_to_name(err));
+        esc.set_torque(0.0f);
+        taskDISABLE_INTERRUPTS();
+        for (;;);
+    }
 
     // Internal software gear count. On startup this should always be neutral.
     gear_t gear_count = GEAR_N;
@@ -233,6 +262,7 @@ void gear_safety_task(void *arg)
         const ShiftRequest request = consume_pending_shift_request();
         if (request == SHIFT_REQUEST_NONE)
         {
+            ESP_LOGW(TAG_GEAR_SAFETY, "Task woke without a pending shift request");
             clear_and_enable_shift_inputs();
             continue;
         }
@@ -253,8 +283,19 @@ void gear_safety_task(void *arg)
         const bool encoder_read_ok = encoder.read_position(encoder_position);
         const bool precheck_passed = shift_is_in_range && ecu_matches_internal_count && encoder_read_ok;
 
+        ESP_LOGI(TAG_GEAR_SAFETY,
+                 "Precheck: request=%s internal=%d ecu=%d ecu_fresh=%d in_range=%d encoder_ok=%d encoder=%u",
+                 shift_request_to_string(request),
+                 static_cast<int>(gear_count),
+                 static_cast<int>(ecu_gear.gear),
+                 static_cast<int>(!ecu_gear_is_stale),
+                 static_cast<int>(shift_is_in_range),
+                 static_cast<int>(encoder_read_ok),
+                 static_cast<unsigned>(encoder_position));
+
         if (!precheck_passed)
         {
+            const gear_t failed_internal_gear_count = gear_count;
             const bool resynced_gear_count =
                 resync_gear_count_from_ecu_if_mismatched(ecu_gear, ecu_gear_is_stale, gear_count);
 
@@ -264,7 +305,7 @@ void gear_safety_task(void *arg)
                      static_cast<int>(shift_is_in_range),
                      static_cast<int>(!ecu_gear_is_stale),
                      static_cast<int>(ecu_gear.gear),
-                     static_cast<int>(gear_count),
+                     static_cast<int>(failed_internal_gear_count),
                      static_cast<int>(encoder_read_ok),
                      static_cast<int>(resynced_gear_count));
             report_rejected_shift(request);
@@ -272,26 +313,57 @@ void gear_safety_task(void *arg)
             continue;
         }
 
-        esc.set_torque(torque_for_shift_request(request, gear_count));
+        const float shift_torque = torque_for_shift_request(request, gear_count);
+        const int shift_torque_milli = static_cast<int>(shift_torque * 1000.0f);
+        ESP_LOGI(TAG_GEAR_SAFETY,
+                 "Commanding ESC: request=%s gear=%d torque_milli=%d target=%u timeout_us=%lld",
+                 shift_request_to_string(request),
+                 static_cast<int>(gear_count),
+                 shift_torque_milli,
+                 static_cast<unsigned>(target_position_for_shift_request(request, gear_count)),
+                 static_cast<long long>(SHIFT_TIMEOUT_US));
+        esc.set_torque(shift_torque);
 
         bool shifted = false;
+        bool encoder_fault = false;
         const int64_t shift_start_us = esp_timer_get_time();
 
         // Core actuation window. Do not block/yield here.
         while ((esp_timer_get_time() - shift_start_us) < SHIFT_TIMEOUT_US)
         {
-            if (shifted_position_reached(request, gear_count))
+            const ShiftPositionStatus position_status = shifted_position_status(request, gear_count);
+            if (position_status == ShiftPositionStatus::Reached)
             {
                 shifted = true;
+                break;
+            }
+            if (position_status == ShiftPositionStatus::ReadFault)
+            {
+                encoder_fault = true;
                 break;
             }
         }
 
         esc.set_torque(0.0f);
+        const int64_t shift_duration_us = esp_timer_get_time() - shift_start_us;
+        ESP_LOGI(TAG_GEAR_SAFETY,
+                 "ESC command cleared: request=%s duration_us=%lld shifted=%d encoder_fault=%d",
+                 shift_request_to_string(request),
+                 static_cast<long long>(shift_duration_us),
+                 static_cast<int>(shifted),
+                 static_cast<int>(encoder_fault));
 
         if (shifted)
         {
             gear_count = gear_after_successful_shift(request, gear_count);
+            ESP_LOGI(TAG_GEAR_SAFETY,
+                     "Internal gear count updated after successful shift: gear=%d",
+                     static_cast<int>(gear_count));
+        }
+        else if (encoder_fault)
+        {
+            ESP_LOGE(TAG_GEAR_SAFETY, "Shift aborted due to encoder read fault: %s",
+                     shift_request_to_string(request));
         }
         else
         {

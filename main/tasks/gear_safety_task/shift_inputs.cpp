@@ -111,7 +111,7 @@ void clear_and_enable_shift_inputs()
     enable_shift_input_interrupts();
 }
 
-void setup_shift_inputs(TaskHandle_t task_handle)
+esp_err_t setup_shift_inputs(TaskHandle_t task_handle)
 {
     shift_task_handle = task_handle;
 
@@ -129,7 +129,7 @@ void setup_shift_inputs(TaskHandle_t task_handle)
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "GPIO config failed: %s", esp_err_to_name(err));
-        return;
+        return err;
     }
 
     // ESP_ERR_INVALID_STATE means another module already installed the ISR service.
@@ -137,29 +137,30 @@ void setup_shift_inputs(TaskHandle_t task_handle)
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "ISR service install failed: %s", esp_err_to_name(err));
-        return;
+        return err;
     }
 
     err = gpio_isr_handler_add(SHIFT_UP_GPIO, shift_up_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "UP ISR add failed: %s", esp_err_to_name(err));
-        return;
+        return err;
     }
 
     err = gpio_isr_handler_add(SHIFT_DOWN_GPIO, shift_down_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "DOWN ISR add failed: %s", esp_err_to_name(err));
-        return;
+        return err;
     }
 
     err = gpio_isr_handler_add(SHIFT_NEUTRAL_GPIO, shift_neutral_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "NEUTRAL ISR add failed: %s", esp_err_to_name(err));
-        return;
+        return err;
     }
 
     ESP_LOGI(TAG_SHIFT_INPUTS, "Shift inputs configured on IO45, IO47, IO48");
+    return ESP_OK;
 }

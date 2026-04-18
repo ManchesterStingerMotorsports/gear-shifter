@@ -52,6 +52,8 @@ If any check fails, the ESC is commanded to zero torque and the shift is rejecte
 
 If the ECU gear packet is fresh but disagrees with the internal gear count, the current shift is still rejected, but the internal gear count is resynchronised to the ECU gear before the next request is accepted.
 
+If encoder feedback is lost during the active shift window, the shift is aborted immediately and the ESC command is cleared instead of waiting for the normal shift timeout.
+
 
 ## Encoder
 
@@ -122,6 +124,8 @@ The wrapper owns the ESP-IDF TWAI node and creates two internal worker tasks:
 
 In this firmware, those worker tasks are pinned to the same control core as the gear safety task so that they cannot run as task-level work during the active shift loop.
 
+Received CAN frames are timestamped when the TWAI receive callback queues them, not when the lower-priority RX worker eventually processes them. This keeps ECU gear freshness checks meaningful even if RX task processing is delayed during a shift.
+
 `can_task` currently subscribes to:
 
 - `0x470`: ECU gear packet. The decoded gear is read from byte 7.
@@ -151,3 +155,14 @@ Hardware/                   KiCad hardware files
 Archive Python Code/        earlier prototype scripts
 ESC Settings/               ESC configuration files
 ```
+
+## Test notes
+
+Before using this on the car:
+
+- measure and fill all encoder stop positions
+- validate the neutral-from-1st and neutral-from-2nd half-shift positions separately
+- tune shift torque and timeout on the assembled mechanism
+- confirm ECU gear decoding against live CAN data
+- confirm CAN and shift-input setup failures are visible on serial and park the controller
+- test encoder read failures and timeout behaviour with the actuator safely unloaded

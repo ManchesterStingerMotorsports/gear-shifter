@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -15,7 +16,7 @@ enum ShiftRequest
 };
 
 // Configure the shift input GPIOs and register their ISRs.
-void setup_shift_inputs(TaskHandle_t shift_task_handle);
+esp_err_t setup_shift_inputs(TaskHandle_t shift_task_handle);
 
 // Take the pending request and clear the shared latch.
 ShiftRequest consume_pending_shift_request();

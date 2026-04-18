@@ -23,6 +23,7 @@ namespace MSM_CAN
     {
         uint16_t id;
         uint8_t data[8];
+        uint32_t timestamp_ms;
     };
 
     struct SubEntry
@@ -265,6 +266,7 @@ namespace MSM_CAN
 
         RxPkt pkt{};
         pkt.id = static_cast<uint16_t>(rx_frame.header.id & 0x7FFu);
+        pkt.timestamp_ms = now_ms();
         for (int i = 0; i < 8; i++)
         {
             pkt.data[i] = rx_frame.buffer[i];
@@ -297,7 +299,6 @@ namespace MSM_CAN
                 continue;
             }
 
-            const uint32_t ts = now_ms();
             void (*cb)(uint16_t, const uint8_t[8], uint32_t) = nullptr;
 
             if (g_subs_mutex != nullptr &&
@@ -307,7 +308,7 @@ namespace MSM_CAN
                 if (idx >= 0)
                 {
                     copy_payload(g_subs[idx].last_packet, pkt.data);
-                    g_subs[idx].last_timestamp_ms = ts;
+                    g_subs[idx].last_timestamp_ms = pkt.timestamp_ms;
                     g_subs[idx].has_last_packet = true;
                     cb = g_subs[idx].callback;
                 }
@@ -316,7 +317,7 @@ namespace MSM_CAN
 
             if (cb != nullptr)
             {
-                cb(pkt.id, pkt.data, ts);
+                cb(pkt.id, pkt.data, pkt.timestamp_ms);
             }
         }
     }

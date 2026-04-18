@@ -716,7 +716,7 @@ namespace MSM_CAN
             nullptr,
             tskIDLE_PRIORITY + 1,
             nullptr);
-            //18.5khz ben farwell DAQ lab
+
         if (rx_task_ok != pdPASS)
         {
             twai_node_disable(g_node);

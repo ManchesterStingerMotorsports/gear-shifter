@@ -15,6 +15,11 @@ static const gpio_num_t SHIFT_UP_GPIO = GPIO_NUM_45;
 static const gpio_num_t SHIFT_DOWN_GPIO = GPIO_NUM_47;
 static const gpio_num_t SHIFT_NEUTRAL_GPIO = GPIO_NUM_48;
 
+static constexpr uint64_t gpio_select(gpio_num_t gpio)
+{
+    return 1ULL << static_cast<uint64_t>(gpio);
+}
+
 // Protects the single pending request shared between the ISR and task.
 static portMUX_TYPE shift_input_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -112,9 +117,9 @@ void setup_shift_inputs(TaskHandle_t task_handle)
 
     gpio_config_t shift_input_config = {};
     shift_input_config.pin_bit_mask =
-        GPIO_SEL_45 |
-        GPIO_SEL_47 |
-        GPIO_SEL_48;
+        gpio_select(SHIFT_UP_GPIO) |
+        gpio_select(SHIFT_DOWN_GPIO) |
+        gpio_select(SHIFT_NEUTRAL_GPIO);
     shift_input_config.mode = GPIO_MODE_INPUT;
     shift_input_config.pull_up_en = GPIO_PULLUP_DISABLE;
     shift_input_config.pull_down_en = GPIO_PULLDOWN_ENABLE;

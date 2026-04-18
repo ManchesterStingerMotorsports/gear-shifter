@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 
-#include "esp_attr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -24,6 +23,6 @@ ShiftRequest consume_pending_shift_request();
 // Clear stale input state and re-enable the shift GPIO interrupts.
 void clear_and_enable_shift_inputs();
 
-void IRAM_ATTR shift_up_isr(void *arg);
-void IRAM_ATTR shift_down_isr(void *arg);
-void IRAM_ATTR shift_neutral_isr(void *arg);
+void shift_up_isr(void *arg);
+void shift_down_isr(void *arg);
+void shift_neutral_isr(void *arg);

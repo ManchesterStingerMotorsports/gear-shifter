@@ -6,7 +6,7 @@ pulse and pray the sealed little brick interprets it correctly. That’s the int
 Calling the function set_torque() is borderline dishonest. We’re nudging a pulse width between 1 ms and 2 ms 
 and hoping the ESC’s internal black-box firmware decides to do something vaguely proportional. 
 
-This class is nothign but a shitty abstraction layered over a legacy signal standard that should have
+This class is nothing but a shitty abstraction layered over a legacy signal standard that should have
 died decades ago. Indirect, lossy and completely detached from the physical quantity we actually care 
 about. We are stuck feeding the ESC a glorified guess and letting it figure things out behind closed doors.
 
@@ -18,8 +18,8 @@ I personally apologise for being complicit in this deceit by naming the set_torq
 no poor soul ever has to revisit this and discover that arguably the most safety critical custom board on the IC car 
 is being driven by a glorified servo pulse and a blind leap of faith. 
 
-Personally instead of poking around here any more than is absolutely necessary I would just tweak the parameters 
-FULL_REVERSE_US, NEUTRAL_US and FULL_FORWARD_US, test, and move on. 
+If you do really need to be here, the best I can do is point you in the direction of FULL_REVERSE_US, NEUTRAL_US
+and FULL_FORWARD_US. These parameters adjust the "torque command" sent to the ESC.
 
 ~ James 
 */
@@ -40,12 +40,15 @@ class ESC
 public:
     explicit ESC(gpio_num_t pwm_pin)                                                        
     { 
-        ledc_timer_config_t timer_config = {};                                               //ledc is the ESP's "easy" PWM function, MCPWM (motor control PWM) is the "harder"
-        timer_config.speed_mode = LEDC_LOW_SPEED_MODE;                                       //equivalent, thankfully we do not need to use it as MCPWM is generally used for H bridge stuff
+        // LEDC is enough because the ESC wants an RC-servo-style PWM signal.
+        ledc_timer_config_t timer_config = {};
+
+        timer_config.speed_mode = LEDC_LOW_SPEED_MODE;
         timer_config.timer_num = PWM_TIMER;
         timer_config.duty_resolution = PWM_RESOLUTION;
         timer_config.freq_hz = PWM_FREQ_HZ;
         timer_config.clk_cfg = LEDC_AUTO_CLK;
+
         ESP_ERROR_CHECK(ledc_timer_config(&timer_config));
 
         ledc_channel_config_t channel_config = {};
@@ -56,13 +59,18 @@ public:
         channel_config.timer_sel = PWM_TIMER;
         channel_config.duty = pulse_us_to_duty(NEUTRAL_US);
         channel_config.hpoint = 0;
+
         ESP_ERROR_CHECK(ledc_channel_config(&channel_config));
 
         set_torque(0.0f);
     }
 
+    //   -1.0 means full reverse pulse width
+    //    0.0 means neutral pulse width
+    //    1.0 means full forward pulse width
     void set_torque(float torque)
     {
+        // Clamp so bugs elsewhere cannot command outside the calibrated range.
         torque = std::clamp(torque, -1.0f, 1.0f);
 
         float pulse_us = NEUTRAL_US;
@@ -83,14 +91,19 @@ public:
     }
 
 private:
+    // Fixed LEDC timer/channel for the ESC PWM output.
     static constexpr ledc_timer_t PWM_TIMER = LEDC_TIMER_0;
     static constexpr ledc_channel_t PWM_CHANNEL = LEDC_CHANNEL_0;
+
     static constexpr ledc_timer_bit_t PWM_RESOLUTION = LEDC_TIMER_14_BIT;
     static constexpr uint32_t PWM_DUTY_MAX = (1u << 14) - 1u;
+
+    // RC-style PWM.
     static constexpr uint32_t PWM_FREQ_HZ = 60;
     static constexpr float PWM_PERIOD_US = 1000000.0f / PWM_FREQ_HZ;
 
-    static constexpr float FULL_REVERSE_US = 1048.0f;                                           //these are the bits you want to change after calibration 
+    // Calibrated pulse widths. Tune these after bench testing.
+    static constexpr float FULL_REVERSE_US = 1048.0f;
     static constexpr float NEUTRAL_US = 1479.0f;
     static constexpr float FULL_FORWARD_US = 1910.0f;
 

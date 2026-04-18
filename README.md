@@ -22,7 +22,22 @@ Additional shift inputs are ignored during this window.
 - `can_task`: lower-priority task that keeps the latest ECU gear snapshot fresh from CAN.
 - `gear_safety_task`: highest-priority task that owns shift validation, ESC actuation, timeout handling, and encoder confirmation.
 
+The control-path tasks are pinned to ESP32-S3 core 1. This is deliberate: during the active shift window, the gear safety task should win by priority instead of allowing lower-priority CAN work to run on the other core.
+
 If either task fails to start, the firmware disables interrupts and parks.
+
+## Core model
+
+Core 1 is treated as the control core:
+
+- `gear_safety_task`
+- `can_task`
+- `MSM_CAN_RX`
+- `MSM_CAN_TX`
+
+`gear_safety_task` runs at the highest application priority. The CAN-facing tasks run at low priority on the same core. This means that while the ESC is actively being commanded during a shift, task-level CAN processing should not run until the gear safety task exits the shift window.
+
+This does not disable hardware interrupts. TWAI/CAN ISR callbacks may still fire and queue received frames, but the RX/TX worker tasks are pinned to the control core and remain lower priority than the gear safety task.
 
 ## Shift safety checks
 
@@ -96,6 +111,15 @@ The firmware currently uses:
 
 ## CAN inputs
 
+This project is currently using a slightly modified version of `MSM_CAN`.
+
+The wrapper owns the ESP-IDF TWAI node and creates two internal worker tasks:
+
+- `MSM_CAN_RX`: receives frames from the TWAI ISR queue and updates subscription state.
+- `MSM_CAN_TX`: handles one-shot and scheduled transmit requests.
+
+In this firmware, those worker tasks are pinned to the same control core as the gear safety task so that they cannot run as task-level work during the active shift loop.
+
 `can_task` currently subscribes to:
 
 - `0x470`: ECU gear packet. The decoded gear is read from byte 7.
@@ -125,5 +149,4 @@ Hardware/                   KiCad hardware files
 Archive Python Code/        earlier prototype scripts
 ESC Settings/               ESC configuration files
 ```
-
 

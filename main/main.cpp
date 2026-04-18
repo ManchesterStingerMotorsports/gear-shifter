@@ -56,6 +56,12 @@ Some of the important safety checks are:
 //Logging is seperated by tags
 static const char *TAG_SYS = "SYSTEM";
 
+// Keep all control-path tasks on one core so priority, not cross-core
+// scheduling, decides what can run during the shift actuation window.
+static const BaseType_t CONTROL_CORE = 1;
+static const UBaseType_t CAN_TASK_PRIORITY = 1;
+static const UBaseType_t GEAR_SAFETY_TASK_PRIORITY = configMAX_PRIORITIES - 1;
+
 // Entry point
 extern "C" void app_main(void)
 {
@@ -66,11 +72,23 @@ extern "C" void app_main(void)
     
     // CAN is deliberately lower priority than the shifter. It should keep the
     // latest ECU/CAN state fresh, but it must not preempt the core shift action.
-    ok = xTaskCreate(can_task, "can_task", 4096, nullptr, 1, nullptr);
+    ok = xTaskCreatePinnedToCore(can_task,
+                                 "can_task",
+                                 4096,
+                                 nullptr,
+                                 CAN_TASK_PRIORITY,
+                                 nullptr,
+                                 CONTROL_CORE);
     if(ok != pdPASS){success = false;}
 
     //highest priority.
-    ok = xTaskCreate(gear_safety_task, "gear_safety_task", 4096, nullptr, configMAX_PRIORITIES - 1, nullptr);
+    ok = xTaskCreatePinnedToCore(gear_safety_task,
+                                 "gear_safety_task",
+                                 4096,
+                                 nullptr,
+                                 GEAR_SAFETY_TASK_PRIORITY,
+                                 nullptr,
+                                 CONTROL_CORE);
     if(ok != pdPASS){success = false;}
     
     // If task creation fails, the controller is in an unknown/partial startup

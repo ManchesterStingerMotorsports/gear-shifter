@@ -86,6 +86,8 @@ namespace MSM_CAN
 
     static constexpr uint16_t RX_TASK_STACK = 4096;
     static constexpr uint16_t TX_TASK_STACK = 4096;
+    static constexpr BaseType_t CONTROL_CORE = 1;
+    static constexpr UBaseType_t CAN_WORKER_TASK_PRIORITY = tskIDLE_PRIORITY + 1;
 
     static bool g_initialised = false;
 
@@ -709,13 +711,14 @@ namespace MSM_CAN
             return ESP_FAIL;
         }
 
-        BaseType_t rx_task_ok = xTaskCreate(
+        BaseType_t rx_task_ok = xTaskCreatePinnedToCore(
             rx_task,
             "MSM_CAN_RX",
             RX_TASK_STACK,
             nullptr,
-            tskIDLE_PRIORITY + 1,
-            nullptr);
+            CAN_WORKER_TASK_PRIORITY,
+            nullptr,
+            CONTROL_CORE);
 
         if (rx_task_ok != pdPASS)
         {
@@ -725,13 +728,14 @@ namespace MSM_CAN
             return ESP_ERR_NO_MEM;
         }
 
-        BaseType_t tx_task_ok = xTaskCreate(
+        BaseType_t tx_task_ok = xTaskCreatePinnedToCore(
             tx_task,
             "MSM_CAN_TX",
             TX_TASK_STACK,
             nullptr,
-            tskIDLE_PRIORITY + 1,
-            nullptr);
+            CAN_WORKER_TASK_PRIORITY,
+            nullptr,
+            CONTROL_CORE);
 
         if (tx_task_ok != pdPASS)
         {

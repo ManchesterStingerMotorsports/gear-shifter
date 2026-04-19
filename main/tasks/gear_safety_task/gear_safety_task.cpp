@@ -34,15 +34,15 @@ static AMT20 encoder(SPI2_HOST,
                      ENCODER_SCLK_GPIO);
 
 // Maximum time the shift task will drive the ESC while waiting for confirmation
-// that the requested shift has completed.
+// that the requested shift has completed. This may need to be adjusted.
 static const int64_t SHIFT_TIMEOUT_US = 200000;
 
 // Maximum accepted age for the ECU gear packet used by the pre-shift safety
 // checks.
-static const uint32_t ECU_GEAR_MAX_AGE_MS = 200;
+static const uint32_t ECU_GEAR_MAX_AGE_MS = 400;
 
 // Placeholder torque commands for each shift type. These are normalised values
-// passed into ESC::set_torque(), not real measured torque.
+// passed into ESC::set_torque(). These may need to be modified during testing
 static const float SHIFT_UP_TORQUE = 0.25f;
 static const float SHIFT_DOWN_TORQUE = -0.25f;
 static const float SHIFT_NEUTRAL_FROM_1_TORQUE = 0.25f;
@@ -119,7 +119,7 @@ static bool requested_shift_is_in_range(ShiftRequest request, gear_t gear_count)
         return false;
     }
 }
-
+//take shift request and return the target position that the encoder wants to reach
 static uint16_t target_position_for_shift_request(ShiftRequest request, gear_t gear_count)
 {
     switch (request)

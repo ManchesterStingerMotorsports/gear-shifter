@@ -30,7 +30,7 @@ GearSnapshot read_ecu_gear_snapshot()
     GearSnapshot snapshot;
 
     // Copy the complete struct while protected, then return the local copy.
-    // it can then be inspected without holding any lock.
+    // it can then be inspected without holding lock.
     portENTER_CRITICAL(&ecu_gear_snapshot_mux);
     snapshot = ecu_gear_snapshot;
     portEXIT_CRITICAL(&ecu_gear_snapshot_mux);

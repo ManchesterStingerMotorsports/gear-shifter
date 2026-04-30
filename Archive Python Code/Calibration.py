@@ -1,4 +1,4 @@
-# motor_control.py
+p# motor_control.py
 #
 # A MicroPython script for controlling a brushless motor via an ESC
 # on a Raspberry Pi Pico.

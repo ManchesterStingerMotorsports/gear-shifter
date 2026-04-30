@@ -1,0 +1,13 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "AMT20.cpp"
+    PRIV_REQUIRES
+        freertos
+        log
+        esp_driver_gpio
+        esp_driver_spi
+        esp_timer
+    INCLUDE_DIRS
+        "."
+)

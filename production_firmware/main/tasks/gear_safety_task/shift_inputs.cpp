@@ -11,13 +11,22 @@
 
 static const char *TAG_SHIFT_INPUTS = "SHIFT_INPUTS";
 
-static const gpio_num_t SHIFT_UP_GPIO = GPIO_NUM_45;
-static const gpio_num_t SHIFT_DOWN_GPIO = GPIO_NUM_47;
+static const gpio_num_t SHIFT_UP_GPIO = GPIO_NUM_47;
+static const gpio_num_t SHIFT_DOWN_GPIO = GPIO_NUM_45;
 static const gpio_num_t SHIFT_NEUTRAL_GPIO = GPIO_NUM_48;
+
+static const uint32_t SHIFT_INPUT_RELEASE_DEBOUNCE_MS = 30;
+static const uint32_t SHIFT_INPUT_RELEASE_POLL_MS = 1;
 
 static constexpr uint64_t gpio_select(gpio_num_t gpio)
 {
     return 1ULL << static_cast<uint64_t>(gpio);
+}
+
+static TickType_t ticks_at_least_one(uint32_t milliseconds)
+{
+    const TickType_t ticks = pdMS_TO_TICKS(milliseconds);
+    return ticks > 0 ? ticks : 1;
 }
 
 // Protects the single pending request shared between the ISR and task.
@@ -40,6 +49,47 @@ static void enable_shift_input_interrupts()
     gpio_intr_enable(SHIFT_UP_GPIO);
     gpio_intr_enable(SHIFT_DOWN_GPIO);
     gpio_intr_enable(SHIFT_NEUTRAL_GPIO);
+}
+
+static bool shift_inputs_released()
+{
+    return gpio_get_level(SHIFT_UP_GPIO) == 0 &&
+           gpio_get_level(SHIFT_DOWN_GPIO) == 0 &&
+           gpio_get_level(SHIFT_NEUTRAL_GPIO) == 0;
+}
+
+static void wait_for_shift_inputs_released()
+{
+    const TickType_t debounce_ticks = ticks_at_least_one(SHIFT_INPUT_RELEASE_DEBOUNCE_MS);
+    const TickType_t poll_ticks = ticks_at_least_one(SHIFT_INPUT_RELEASE_POLL_MS);
+    TickType_t released_since = 0;
+    bool released = false;
+
+    while (true)
+    {
+        const TickType_t now = xTaskGetTickCount();
+
+        if (shift_inputs_released())
+        {
+            if (!released)
+            {
+                released_since = now;
+                released = true;
+            }
+
+            if ((now - released_since) >= debounce_ticks)
+            {
+                return;
+            }
+        }
+        else
+        {
+            released = false;
+            released_since = 0;
+        }
+
+        vTaskDelay(poll_ticks);
+    }
 }
 
 // Latch a request and wake the shift task. The shift itself is not done here.
@@ -103,7 +153,14 @@ ShiftRequest consume_pending_shift_request()
 
 void clear_and_enable_shift_inputs()
 {
-    // Clear stale/bounced requests before accepting another shift input.
+    // Clear stale requests before waiting for the physical switches to release.
+    portENTER_CRITICAL(&shift_input_mux);
+    pending_shift_request = SHIFT_REQUEST_NONE;
+    portEXIT_CRITICAL(&shift_input_mux);
+
+    wait_for_shift_inputs_released();
+
+    // Discard anything observed while the release debounce was settling.
     portENTER_CRITICAL(&shift_input_mux);
     pending_shift_request = SHIFT_REQUEST_NONE;
     portEXIT_CRITICAL(&shift_input_mux);

@@ -1,104 +1,107 @@
 # Gear Shifter
 
-Firmware for the Manchester Stinger Motorsports electronic gear shifter controller.
+ESP-IDF firmware and bench-test projects for the Manchester Stinger Motorsports electronic gear shifter controller.
 
-This project runs on ESP-IDF and controls a motor-driven shift mechanism through a copperhead 10 ESC from castle creations. The firmware listens for shift inputs, checks the requested shift against ECU/CAN gear state, drives the actuator, and confirms completion using an AMT20 absolute encoder from Samesky.
+The repository now contains three standalone ESP32-S3 projects:
 
-## Design intent
+```text
+production_firmware/             Production shifter firmware
+esc_button_test_firmware/        Bench test: buttons command ESC torque
+encoder_position_test_firmware/  Bench test: print AMT20 encoder position
+Hardware/                        KiCad hardware files
+ESC Settings/                    ESC configuration files
+Archive Python Code/             Earlier prototype scripts
+```
 
-The main design goal is that a shift request should either complete in a controlled way or stop cleanly.
+There is intentionally no ESP-IDF project at the repository root. Open/build one of the firmware folders directly.
 
-Shift button interrupts do not perform the shift directly. They only latch the first request, disable further shift input interrupts, and wake the high-priority gear safety task. The gear safety task then owns the actuator until either:
+## Production Firmware
 
-- the encoder reaches the expected shifted position
-- the shift times out
+Project folder:
 
-Additional shift inputs are ignored during this window.
+```text
+production_firmware/
+```
 
-## Runtime tasks
+Build:
 
-`app_main()` starts two application tasks:
+```powershell
+cd C:\Users\james\gear-shifter\production_firmware
+idf.py build
+```
 
-- `can_task`: lower-priority task that keeps the latest ECU gear snapshot fresh from CAN.
-- `gear_safety_task`: highest-priority task that owns shift validation, ESC actuation, timeout handling, and encoder confirmation.
+Flash:
 
-The control-path tasks are pinned to ESP32-S3 core 1. This is deliberate: during the active shift window, the gear safety task should win by priority instead of allowing lower-priority CAN work to run on the other core.
+```powershell
+idf.py -p COMx flash monitor
+```
 
-If either task fails to start, the firmware disables interrupts and parks.
+Current behavior:
 
-## Core model
+- starts the gear safety task only
+- reads shift inputs from GPIO
+- commands the ESC immediately for the requested shift
+- stops the ESC when the encoder reaches the calibrated target, an encoder read fails, or the shift timeout expires
+- prints encoder position continuously while idle and during shift movement
+- has CAN/ECU safety checks removed for standalone testing
 
-Core 1 is treated as the control core:
+Calibration constants live in:
 
-- `gear_safety_task`
-- `can_task`
-- `MSM_CAN_RX`
-- `MSM_CAN_TX`
+```text
+production_firmware/main/tasks/gear_safety_task/gear_safety_task.cpp
+```
 
-`gear_safety_task` runs at the highest application priority. The CAN-facing tasks run at low priority on the same core. This means that while the ESC is actively being commanded during a shift, task-level CAN processing should not run until the gear safety task exits the shift window.
-
-This does not disable hardware interrupts. TWAI/CAN ISR callbacks may still fire and queue received frames, but the RX/TX worker tasks are pinned to the control core and remain lower priority than the gear safety task.
-
-## Shift safety checks
-
-Before commanding the ESC, the gear safety task checks:
-
-- the requested shift is allowed from the current internal gear count
-- the ECU gear packet is fresh
-- the ECU gear agrees with the internal gear count
-- the AMT20 encoder can be read successfully
-
-If any check fails, the ESC is commanded to zero torque and the shift is rejected.
-
-If the ECU gear packet is fresh but disagrees with the internal gear count, the current shift is still rejected, but the internal gear count is resynchronised to the ECU gear before the next request is accepted.
-
-If encoder feedback is lost during the active shift window, the shift is aborted immediately and the ESC command is cleared instead of waiting for the normal shift timeout.
-
-
-## Encoder
-
-The shifter uses an AMT20 absolute encoder over SPI. The encoder driver is in:
-
-- `main/encoder/AMT20.hpp`
-- `main/encoder/AMT20.cpp`
-
-The AMT20 driver implements the datasheet read-position sequence:
-
-- send `0x10` to request position
-- poll with `0x00` while the encoder returns `0xA5`
-- wait for the encoder to echo `0x10`
-- read MSB and LSB
-- combine the lower 12 bits into a position from `0` to `4095`
-
-
-## Calibration still required
-
-Final encoder stop positions need to be measured on the assembled mechanism.
-
-These values live in `main/tasks/gear_safety_task/gear_safety_task.cpp`:
+Current values:
 
 ```cpp
-static const uint16_t SHIFT_UP_STOP_POSITION = 0;
-static const uint16_t SHIFT_DOWN_STOP_POSITION = 0;
-static const uint16_t SHIFT_NEUTRAL_FROM_1_STOP_POSITION = 0;
-static const uint16_t SHIFT_NEUTRAL_FROM_2_STOP_POSITION = 0;
+static const float SHIFT_UP_TORQUE = 0.4f;
+static const float SHIFT_DOWN_TORQUE = -0.4f;
+static const uint16_t BASE_POSITION = 2502;
+static const uint16_t SHIFT_UP_STOP_POSITION = 2290;
+static const uint16_t SHIFT_DOWN_STOP_POSITION = 2670;
 static const uint16_t SHIFT_POSITION_TOLERANCE = 20;
 ```
 
-The torque values and timeout are also currently calibration values:
+## ESC Button Test
 
-```cpp
-static const int64_t SHIFT_TIMEOUT_US = 200000;
+Project folder:
 
-static const float SHIFT_UP_TORQUE = 0.25f;
-static const float SHIFT_DOWN_TORQUE = -0.25f;
-static const float SHIFT_NEUTRAL_FROM_1_TORQUE = 0.25f;
-static const float SHIFT_NEUTRAL_FROM_2_TORQUE = -0.25f;
+```text
+esc_button_test_firmware/
 ```
 
-## Current pin map
+Behavior:
 
-The firmware currently uses:
+- hold UP to command positive test torque
+- hold DOWN to command negative test torque
+- release both buttons to send neutral torque
+
+Constants live in:
+
+```text
+esc_button_test_firmware/main/main.cpp
+```
+
+## Encoder Position Test
+
+Project folder:
+
+```text
+encoder_position_test_firmware/
+```
+
+Behavior:
+
+- repeatedly reads the AMT20 encoder over SPI
+- prints the raw encoder position from `0` to `4095`
+
+Constants live in:
+
+```text
+encoder_position_test_firmware/main/main.cpp
+```
+
+## Pin Map
 
 | Function | ESP32-S3 GPIO |
 | --- | ---: |
@@ -107,62 +110,10 @@ The firmware currently uses:
 | Encoder MOSI | GPIO 11 |
 | Encoder SCLK | GPIO 12 |
 | Encoder MISO | GPIO 13 |
-| CAN TX | GPIO 2 |
-| CAN RX | GPIO 1 |
 | Shift up input | GPIO 45 |
 | Shift down input | GPIO 47 |
 | Shift neutral input | GPIO 48 |
 
-## CAN inputs
+## Notes
 
-This project is currently using a slightly modified version of `MSM_CAN`.
-
-The wrapper owns the ESP-IDF TWAI node and creates two internal worker tasks:
-
-- `MSM_CAN_RX`: receives frames from the TWAI ISR queue and updates subscription state.
-- `MSM_CAN_TX`: handles one-shot and scheduled transmit requests.
-
-In this firmware, those worker tasks are pinned to the same control core as the gear safety task so that they cannot run as task-level work during the active shift loop.
-
-Received CAN frames are timestamped when the TWAI receive callback queues them, not when the lower-priority RX worker eventually processes them. This keeps ECU gear freshness checks meaningful even if RX task processing is delayed during a shift.
-
-`can_task` currently subscribes to:
-
-- `0x470`: ECU gear packet. The decoded gear is read from byte 7.
-- `0x360`: RPM packet, reserved for future downshift protection.
-
-Valid ECU gear values are expected to be `0` to `5`, matching:
-
-```cpp
-GEAR_N = 0,
-GEAR_1,
-GEAR_2,
-GEAR_3,
-GEAR_4,
-GEAR_5
-```
-
-## Repository layout
-
-```text
-main/
-  encoder/                  AMT20 absolute encoder driver
-  esc/                      ESC PWM wrapper
-  MSM_CAN/                  CAN helper layer
-  tasks/can_task/           ECU gear snapshot update task
-  tasks/gear_safety_task/   shift request handling and safety logic
-Hardware/                   KiCad hardware files
-Archive Python Code/        earlier prototype scripts
-ESC Settings/               ESC configuration files
-```
-
-## Test notes
-
-Before using this on the car:
-
-- measure and fill all encoder stop positions
-- validate the neutral-from-1st and neutral-from-2nd half-shift positions separately
-- tune shift torque and timeout on the assembled mechanism
-- confirm ECU gear decoding against live CAN data
-- confirm CAN and shift-input setup failures are visible on serial and park the controller
-- test encoder read failures and timeout behaviour with the actuator safely unloaded
+Generated ESP-IDF outputs such as `build/`, `sdkconfig`, `.bin`, `.elf`, and `.map` are ignored. Each project sets the ESP32-S3 target in its own `CMakeLists.txt`.

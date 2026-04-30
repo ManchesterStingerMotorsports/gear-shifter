@@ -10,10 +10,8 @@ It would have completely "locked" the autoshifter into the shift event until eit
     - A timeout occurs. This is logged as an error, but not treated as a hard fail.
 
 I did not end up doing it this way because the shift itself is a relatively long mechanical event, and ISRs are not
-really the right place to sit and wait for mechanical things to happen. Holding a hard interrupt context for the whole
-shift would probably stop CAN updates, but that is not really the main problem. I am okay with CAN being stale during
-the actual shift window because the important ECU gear comparison should already have been snapshotted before the ESC
-is commanded. The bigger problem is timing/watchdog/driver behaviour: a long ISR can upset software timers, watchdog
+really the right place to sit and wait for mechanical things to happen. The bigger problem is
+timing/watchdog/driver behaviour: a long ISR can upset software timers, watchdog
 servicing, and any ESP-IDF/FreeRTOS driver code that expects the RTOS and interrupts to still be alive.
 
 The approach used here is therefore slightly different. The shifting events are still detected by their own dedicated
@@ -34,7 +32,7 @@ is sent.
 
 Some of the important safety checks are: 
     - the requested gear shift does not result in an out-of-range gear (i.e shifting into "6th")
-    - the ECU measured gear and the gear shifter's internal count "agree"
+    - the encoder can be read before the ESC is commanded
     
 **/
 
@@ -49,8 +47,6 @@ Some of the important safety checks are:
 #include "freertos/FreeRTOS.h"                           
 #include "freertos/task.h" 
 
-//the two tasks that are explicitly being used (technically there are 4 as MSM_CAN creates two more)
-#include "can_task.hpp"
 #include "gear_safety_task.hpp"
 
 //Logging is seperated by tags
@@ -59,7 +55,6 @@ static const char *TAG_SYS = "SYSTEM";
 // Keep all control-path tasks on one core so priority, not cross-core
 // scheduling, decides what can run during the shift actuation window.
 static const BaseType_t CONTROL_CORE = 1;
-static const UBaseType_t CAN_TASK_PRIORITY = 1;
 static const UBaseType_t GEAR_SAFETY_TASK_PRIORITY = configMAX_PRIORITIES - 1;
 
 // Entry point
@@ -69,17 +64,6 @@ extern "C" void app_main(void)
 
     BaseType_t ok;
     bool success = true;
-    
-    // CAN is deliberately lower priority than the shifter. It should keep the
-    // latest ECU/CAN state fresh, but it must not preempt the core shift action.
-    ok = xTaskCreatePinnedToCore(can_task,
-                                 "can_task",
-                                 4096,
-                                 nullptr,
-                                 CAN_TASK_PRIORITY,
-                                 nullptr,
-                                 CONTROL_CORE);
-    if(ok != pdPASS){success = false;}
 
     //highest priority.
     ok = xTaskCreatePinnedToCore(gear_safety_task,

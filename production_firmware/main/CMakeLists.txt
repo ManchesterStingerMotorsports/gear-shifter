@@ -1,26 +1,20 @@
 idf_component_register(
     SRCS
         "main.cpp"
-        "MSM_CAN/MSM_CAN.cpp"
         "encoder/AMT20.cpp"
-        "tasks/can_task/can_task.cpp"
-        "tasks/gear_safety_task/gear_state.cpp"
         "tasks/gear_safety_task/gear_safety_task.cpp"
         "tasks/gear_safety_task/shift_inputs.cpp"
     PRIV_REQUIRES
         freertos
         log
         spi_flash
-        esp_driver_twai
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi
         esp_timer
     INCLUDE_DIRS
         "."
-        "MSM_CAN"
         "encoder"
         "esc"
-        "tasks/can_task"
         "tasks/gear_safety_task"
 )

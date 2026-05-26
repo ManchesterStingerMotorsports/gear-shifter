@@ -40,8 +40,11 @@ Current behavior:
 
 - starts the gear safety task only
 - reads shift inputs from GPIO
-- commands the ESC immediately for the requested shift
+- rejects shifts that would leave the valid gear range
+- checks the encoder before commanding the ESC
+- commands the ESC for the requested shift after safety checks pass
 - stops the ESC when the encoder reaches the calibrated target, an encoder read fails, or the shift timeout expires
+- tracks the internal gear state through neutral, 1st, 2nd, 3rd, 4th, and 5th
 - prints encoder position continuously while idle and during shift movement
 - has CAN/ECU safety checks removed for standalone testing
 

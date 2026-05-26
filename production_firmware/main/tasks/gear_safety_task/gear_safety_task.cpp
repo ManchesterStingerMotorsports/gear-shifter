@@ -63,6 +63,15 @@ enum gear_t
     GEAR_5,
 };
 
+enum class ShiftSafetyStatus
+{
+    Allowed,
+    InvalidRequest,
+    OutOfRange,
+    NeutralUnavailable,
+    EncoderFault,
+};
+
 enum class ShiftPositionStatus
 {
     NotReached,
@@ -102,14 +111,48 @@ static void print_encoder_position(const char *phase)
     }
 }
 
-static float torque_for_neutral_from_position()
+static const char *gear_to_string(gear_t gear)
 {
-    uint16_t position = 0;
-    if (!encoder.read_position(position))
+    switch (gear)
     {
-        return SHIFT_NEUTRAL_FROM_1_TORQUE;
+    case GEAR_N:
+        return "N";
+    case GEAR_1:
+        return "1";
+    case GEAR_2:
+        return "2";
+    case GEAR_3:
+        return "3";
+    case GEAR_4:
+        return "4";
+    case GEAR_5:
+        return "5";
+    default:
+        return "?";
     }
+}
 
+static const char *shift_safety_status_to_string(ShiftSafetyStatus status)
+{
+    switch (status)
+    {
+    case ShiftSafetyStatus::Allowed:
+        return "allowed";
+    case ShiftSafetyStatus::InvalidRequest:
+        return "invalid request";
+    case ShiftSafetyStatus::OutOfRange:
+        return "shift would exceed gearbox range";
+    case ShiftSafetyStatus::NeutralUnavailable:
+        return "neutral is only available from 1st or 2nd";
+    case ShiftSafetyStatus::EncoderFault:
+        return "encoder pre-check failed";
+    default:
+        return "unknown";
+    }
+}
+
+static float torque_for_neutral_from_position(uint16_t position)
+{
     if (AMT20::position_is_near(position, BASE_POSITION, SHIFT_POSITION_TOLERANCE))
     {
         return 0.0f;
@@ -118,7 +161,7 @@ static float torque_for_neutral_from_position()
     return position > BASE_POSITION ? SHIFT_NEUTRAL_FROM_1_TORQUE : SHIFT_NEUTRAL_FROM_2_TORQUE;
 }
 
-static float torque_for_shift_request(ShiftRequest request)
+static float torque_for_shift_request(ShiftRequest request, uint16_t current_position)
 {
     switch (request)
     {
@@ -127,10 +170,30 @@ static float torque_for_shift_request(ShiftRequest request)
     case SHIFT_REQUEST_DOWN:
         return SHIFT_DOWN_TORQUE;
     case SHIFT_REQUEST_NEUTRAL:
-        return torque_for_neutral_from_position();
+        return torque_for_neutral_from_position(current_position);
     case SHIFT_REQUEST_NONE:
     default:
         return 0.0f;
+    }
+}
+
+static ShiftSafetyStatus shift_request_safety_status(ShiftRequest request, gear_t gear_count)
+{
+    switch (request)
+    {
+    case SHIFT_REQUEST_UP:
+        return gear_count == GEAR_5 ? ShiftSafetyStatus::OutOfRange : ShiftSafetyStatus::Allowed;
+    case SHIFT_REQUEST_DOWN:
+        return gear_count == GEAR_1 ? ShiftSafetyStatus::OutOfRange : ShiftSafetyStatus::Allowed;
+    case SHIFT_REQUEST_NEUTRAL:
+        if (gear_count == GEAR_1 || gear_count == GEAR_2)
+        {
+            return ShiftSafetyStatus::Allowed;
+        }
+        return ShiftSafetyStatus::NeutralUnavailable;
+    case SHIFT_REQUEST_NONE:
+    default:
+        return ShiftSafetyStatus::InvalidRequest;
     }
 }
 
@@ -144,11 +207,30 @@ static uint16_t target_position_for_shift_request(ShiftRequest request, gear_t g
     case SHIFT_REQUEST_DOWN:
         return SHIFT_DOWN_STOP_POSITION;
     case SHIFT_REQUEST_NEUTRAL:
-        return BASE_POSITION;
+        return gear_count == GEAR_1 ? SHIFT_NEUTRAL_FROM_1_STOP_POSITION : SHIFT_NEUTRAL_FROM_2_STOP_POSITION;
     case SHIFT_REQUEST_NONE:
     default:
         return 0;
     }
+}
+
+static bool read_encoder_before_shift(ShiftRequest request, gear_t gear_count, uint16_t &position)
+{
+    if (encoder.read_position(position))
+    {
+        ESP_LOGI(TAG_GEAR_SAFETY,
+                 "Encoder pre-check passed: request=%s gear=%s position=%u",
+                 shift_request_to_string(request),
+                 gear_to_string(gear_count),
+                 static_cast<unsigned>(position));
+        return true;
+    }
+
+    ESP_LOGE(TAG_GEAR_SAFETY,
+             "Encoder pre-check failed: request=%s gear=%s",
+             shift_request_to_string(request),
+             gear_to_string(gear_count));
+    return false;
 }
 
 // Polling hook used during the shift actuation window. It must be fast and
@@ -160,9 +242,9 @@ static ShiftPositionStatus shifted_position_status(ShiftRequest request, gear_t 
     if (!encoder.read_position(position))
     {
         ESP_LOGE(TAG_GEAR_SAFETY,
-                 "Encoder read failed while checking shift position: request=%s gear=%d",
+                 "Encoder read failed while checking shift position: request=%s gear=%s",
                  shift_request_to_string(request),
-                 static_cast<int>(gear_count));
+                 gear_to_string(gear_count));
         return ShiftPositionStatus::ReadFault;
     }
 
@@ -206,9 +288,25 @@ static gear_t gear_after_successful_shift(ShiftRequest request, gear_t gear_coun
     switch (request)
     {
     case SHIFT_REQUEST_UP:
-        return GEAR_2;
+        if (gear_count == GEAR_N)
+        {
+            return GEAR_2;
+        }
+        if (gear_count < GEAR_5)
+        {
+            return static_cast<gear_t>(gear_count + 1);
+        }
+        return gear_count;
     case SHIFT_REQUEST_DOWN:
-        return GEAR_1;
+        if (gear_count == GEAR_N)
+        {
+            return GEAR_1;
+        }
+        if (gear_count > GEAR_1)
+        {
+            return static_cast<gear_t>(gear_count - 1);
+        }
+        return gear_count;
     case SHIFT_REQUEST_NEUTRAL:
         return GEAR_N;
     case SHIFT_REQUEST_NONE:
@@ -261,12 +359,32 @@ void gear_safety_task(void *arg)
 
         ESP_LOGI(TAG_GEAR_SAFETY, "Shift request accepted: %s", shift_request_to_string(request));
 
-        const float shift_torque = torque_for_shift_request(request);
+        ShiftSafetyStatus safety_status = shift_request_safety_status(request, gear_count);
+        uint16_t current_position = 0;
+        if (safety_status == ShiftSafetyStatus::Allowed &&
+            !read_encoder_before_shift(request, gear_count, current_position))
+        {
+            safety_status = ShiftSafetyStatus::EncoderFault;
+        }
+
+        if (safety_status != ShiftSafetyStatus::Allowed)
+        {
+            ESP_LOGW(TAG_GEAR_SAFETY,
+                     "Shift rejected: request=%s gear=%s reason=%s",
+                     shift_request_to_string(request),
+                     gear_to_string(gear_count),
+                     shift_safety_status_to_string(safety_status));
+            command_esc_neutral(esc, "shift rejected");
+            clear_and_enable_shift_inputs();
+            continue;
+        }
+
+        const float shift_torque = torque_for_shift_request(request, current_position);
         const int shift_torque_milli = static_cast<int>(shift_torque * 1000.0f);
         ESP_LOGI(TAG_GEAR_SAFETY,
-                 "Commanding ESC: request=%s gear=%d torque_milli=%d target=%u timeout_us=%lld",
+                 "Commanding ESC: request=%s gear=%s torque_milli=%d target=%u timeout_us=%lld",
                  shift_request_to_string(request),
-                 static_cast<int>(gear_count),
+                 gear_to_string(gear_count),
                  shift_torque_milli,
                  static_cast<unsigned>(target_position_for_shift_request(request, gear_count)),
                  static_cast<long long>(SHIFT_TIMEOUT_US));
@@ -305,8 +423,8 @@ void gear_safety_task(void *arg)
         {
             gear_count = gear_after_successful_shift(request, gear_count);
             ESP_LOGI(TAG_GEAR_SAFETY,
-                     "Internal gear count updated after successful shift: gear=%d",
-                     static_cast<int>(gear_count));
+                     "Internal gear count updated after successful shift: gear=%s",
+                     gear_to_string(gear_count));
         }
         else if (encoder_fault)
         {

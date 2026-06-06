@@ -10,6 +10,8 @@
 
 namespace config
 {
+static constexpr bool STANDALONE_TESTING = true;
+
 // Keep control-path tasks on one core so priority, not cross-core scheduling,
 // decides what can run during the shift actuation window.
 static const BaseType_t CONTROL_CORE = 1;

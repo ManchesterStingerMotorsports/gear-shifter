@@ -275,36 +275,39 @@ static void process_shift_request(ShiftRequest request, Gear &gear_count, AMT20 
 {
     ESP_LOGI(TAG_SHIFTER, "Shift request accepted: %s", shift_request_to_string(request));
 
-    const CanTaskOutput can_output = get_can_task_output();
-    if (can_output.neutral_pos)
+    if (!config::STANDALONE_TESTING)
     {
-        if (gear_count != GEAR_N)
+        const CanTaskOutput can_output = get_can_task_output();
+        if (can_output.neutral_pos)
         {
-            ESP_LOGI(TAG_SHIFTER,
-                     "Pre-check synced gear from neutral sensor: previous=%s gear=N",
-                     gear_to_string(gear_count));
-        }
-        gear_count = GEAR_N;
-    }
-    else if (can_output.is_moving)
-    {
-        Gear ecu_gear = gear_count;
-        if (ecu_gear_to_gear(can_output.ecu_gear, ecu_gear))
-        {
-            if (gear_count != ecu_gear)
+            if (gear_count != GEAR_N)
             {
                 ESP_LOGI(TAG_SHIFTER,
-                         "Pre-check synced gear from ECU: previous=%s ecu_gear=%s",
-                         gear_to_string(gear_count),
-                         gear_to_string(ecu_gear));
+                         "Pre-check synced gear from neutral sensor: previous=%s gear=N",
+                         gear_to_string(gear_count));
             }
-            gear_count = ecu_gear;
+            gear_count = GEAR_N;
         }
-        else
+        else if (can_output.is_moving)
         {
-            ESP_LOGW(TAG_SHIFTER,
-                     "Ignoring invalid ECU gear during pre-check: ecu_gear=%d",
-                     static_cast<int>(can_output.ecu_gear));
+            Gear ecu_gear = gear_count;
+            if (ecu_gear_to_gear(can_output.ecu_gear, ecu_gear))
+            {
+                if (gear_count != ecu_gear)
+                {
+                    ESP_LOGI(TAG_SHIFTER,
+                             "Pre-check synced gear from ECU: previous=%s ecu_gear=%s",
+                             gear_to_string(gear_count),
+                             gear_to_string(ecu_gear));
+                }
+                gear_count = ecu_gear;
+            }
+            else
+            {
+                ESP_LOGW(TAG_SHIFTER,
+                         "Ignoring invalid ECU gear during pre-check: ecu_gear=%d",
+                         static_cast<int>(can_output.ecu_gear));
+            }
         }
     }
 

@@ -5,12 +5,13 @@ ESP-IDF firmware and bench-test projects for the Manchester Stinger Motorsports 
 The repository now contains three standalone ESP32-S3 projects:
 
 ```text
-production_firmware/             Production shifter firmware
-esc_button_test_firmware/        Bench test: buttons command ESC torque
-encoder_position_test_firmware/  Bench test: print AMT20 encoder position
-Hardware/                        KiCad hardware files
-ESC Settings/                    ESC configuration files
-Archive Python Code/             Earlier prototype scripts
+gear-shifter/
+  production_firmware/             Production shifter firmware
+  esc_button_test_firmware/        Bench test: buttons command ESC torque
+  encoder_position_test_firmware/  Bench test: print AMT20 encoder position
+  Hardware/                        KiCad hardware files
+  ESC Settings/                    ESC configuration files
+  Archive Python Code/             Earlier prototype scripts
 ```
 
 There is intentionally no ESP-IDF project at the repository root. Open/build one of the firmware folders directly.
@@ -26,7 +27,7 @@ production_firmware/
 Build:
 
 ```powershell
-cd C:\Users\james\gear-shifter\production_firmware
+cd C:\Users\james\FS\gear-shifter\production_firmware
 idf.py build
 ```
 
@@ -41,12 +42,12 @@ Current behavior:
 - starts the shifter task and a placeholder CAN task
 - reads shift inputs from GPIO
 - rejects shifts that would leave the valid gear range
+- uses the latest CAN task output during pre-check: neutral position sensor first, then ECU gear when the car is moving
 - checks the encoder before commanding the ESC
 - commands the ESC for the requested shift after safety checks pass
 - stops the ESC when the encoder reaches the calibrated target, an encoder read fails, or the shift timeout expires
 - tracks the internal gear state through neutral, 1st, 2nd, 3rd, 4th, and 5th
 - prints encoder position continuously while idle and during shift movement
-- has CAN/ECU safety checks removed for standalone testing
 
 Production pin, timing, and calibration constants live in:
 
@@ -54,9 +55,24 @@ Production pin, timing, and calibration constants live in:
 production_firmware/main/config.hpp
 ```
 
+Production source layout:
+
+```text
+production_firmware/main/
+  config.hpp
+  main.cpp
+  encoder/             AMT20 encoder driver
+  esc/                 ESC PWM driver
+  interrupts/          GPIO ISR/input latch code
+  tasks/
+    can_task/          CAN output placeholder/status
+    shifter_task/      Main shifter control logic
+```
+
 Current values:
 
 ```cpp
+static constexpr bool STANDALONE_TESTING = true;
 static constexpr float SHIFT_UP_TORQUE = 0.4f;
 static constexpr float SHIFT_DOWN_TORQUE = -0.4f;
 static constexpr float SHIFT_1_TO_NEUTRAL_TORQUE = SHIFT_UP_TORQUE;
@@ -117,6 +133,6 @@ encoder_position_test_firmware/main/main.cpp
 | Encoder MOSI | GPIO 11 |
 | Encoder SCLK | GPIO 12 |
 | Encoder MISO | GPIO 13 |
-| Shift up input | GPIO 45 |
-| Shift down input | GPIO 47 |
+| Shift up input | GPIO 47 |
+| Shift down input | GPIO 45 |
 | Shift neutral input | GPIO 48 |

@@ -2,8 +2,11 @@ idf_component_register(
     SRCS
         "main.cpp"
         "encoder/AMT20.cpp"
-        "tasks/gear_safety_task/gear_safety_task.cpp"
-        "tasks/gear_safety_task/shift_inputs.cpp"
+        "esc/ESC.cpp"
+        "interrupts/shift_inputs.cpp"
+        "tasks/can_task/can_status.cpp"
+        "tasks/can_task/can_task.cpp"
+        "tasks/shifter_task/shifter_task.cpp"
     PRIV_REQUIRES
         freertos
         log
@@ -16,5 +19,7 @@ idf_component_register(
         "."
         "encoder"
         "esc"
-        "tasks/gear_safety_task"
+        "interrupts"
+        "tasks/can_task"
+        "tasks/shifter_task"
 )

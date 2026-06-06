@@ -1,5 +1,7 @@
 #include "shift_inputs.hpp"
 
+#include "config.hpp"
+
 #include "driver/gpio.h"
 #include "esp_attr.h"
 #include "esp_err.h"
@@ -10,13 +12,6 @@
 #include "freertos/task.h"
 
 static const char *TAG_SHIFT_INPUTS = "SHIFT_INPUTS";
-
-static const gpio_num_t SHIFT_UP_GPIO = GPIO_NUM_47;
-static const gpio_num_t SHIFT_DOWN_GPIO = GPIO_NUM_45;
-static const gpio_num_t SHIFT_NEUTRAL_GPIO = GPIO_NUM_48;
-
-static const uint32_t SHIFT_INPUT_RELEASE_DEBOUNCE_MS = 30;
-static const uint32_t SHIFT_INPUT_RELEASE_POLL_MS = 1;
 
 static constexpr uint64_t gpio_select(gpio_num_t gpio)
 {
@@ -39,29 +34,29 @@ static volatile ShiftRequest pending_shift_request = SHIFT_REQUEST_NONE;
 
 static void disable_shift_input_interrupts()
 {
-    gpio_intr_disable(SHIFT_UP_GPIO);
-    gpio_intr_disable(SHIFT_DOWN_GPIO);
-    gpio_intr_disable(SHIFT_NEUTRAL_GPIO);
+    gpio_intr_disable(config::SHIFT_UP_GPIO);
+    gpio_intr_disable(config::SHIFT_DOWN_GPIO);
+    gpio_intr_disable(config::SHIFT_NEUTRAL_GPIO);
 }
 
 static void enable_shift_input_interrupts()
 {
-    gpio_intr_enable(SHIFT_UP_GPIO);
-    gpio_intr_enable(SHIFT_DOWN_GPIO);
-    gpio_intr_enable(SHIFT_NEUTRAL_GPIO);
+    gpio_intr_enable(config::SHIFT_UP_GPIO);
+    gpio_intr_enable(config::SHIFT_DOWN_GPIO);
+    gpio_intr_enable(config::SHIFT_NEUTRAL_GPIO);
 }
 
 static bool shift_inputs_released()
 {
-    return gpio_get_level(SHIFT_UP_GPIO) == 0 &&
-           gpio_get_level(SHIFT_DOWN_GPIO) == 0 &&
-           gpio_get_level(SHIFT_NEUTRAL_GPIO) == 0;
+    return gpio_get_level(config::SHIFT_UP_GPIO) == 0 &&
+           gpio_get_level(config::SHIFT_DOWN_GPIO) == 0 &&
+           gpio_get_level(config::SHIFT_NEUTRAL_GPIO) == 0;
 }
 
 static void wait_for_shift_inputs_released()
 {
-    const TickType_t debounce_ticks = ticks_at_least_one(SHIFT_INPUT_RELEASE_DEBOUNCE_MS);
-    const TickType_t poll_ticks = ticks_at_least_one(SHIFT_INPUT_RELEASE_POLL_MS);
+    const TickType_t debounce_ticks = ticks_at_least_one(config::SHIFT_INPUT_RELEASE_DEBOUNCE_MS);
+    const TickType_t poll_ticks = ticks_at_least_one(config::SHIFT_INPUT_RELEASE_POLL_MS);
     TickType_t released_since = 0;
     bool released = false;
 
@@ -174,9 +169,9 @@ esp_err_t setup_shift_inputs(TaskHandle_t task_handle)
 
     gpio_config_t shift_input_config = {};
     shift_input_config.pin_bit_mask =
-        gpio_select(SHIFT_UP_GPIO) |
-        gpio_select(SHIFT_DOWN_GPIO) |
-        gpio_select(SHIFT_NEUTRAL_GPIO);
+        gpio_select(config::SHIFT_UP_GPIO) |
+        gpio_select(config::SHIFT_DOWN_GPIO) |
+        gpio_select(config::SHIFT_NEUTRAL_GPIO);
     shift_input_config.mode = GPIO_MODE_INPUT;
     shift_input_config.pull_up_en = GPIO_PULLUP_DISABLE;
     shift_input_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
@@ -197,21 +192,21 @@ esp_err_t setup_shift_inputs(TaskHandle_t task_handle)
         return err;
     }
 
-    err = gpio_isr_handler_add(SHIFT_UP_GPIO, shift_up_isr, nullptr);
+    err = gpio_isr_handler_add(config::SHIFT_UP_GPIO, shift_up_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "UP ISR add failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = gpio_isr_handler_add(SHIFT_DOWN_GPIO, shift_down_isr, nullptr);
+    err = gpio_isr_handler_add(config::SHIFT_DOWN_GPIO, shift_down_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "DOWN ISR add failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = gpio_isr_handler_add(SHIFT_NEUTRAL_GPIO, shift_neutral_isr, nullptr);
+    err = gpio_isr_handler_add(config::SHIFT_NEUTRAL_GPIO, shift_neutral_isr, nullptr);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_SHIFT_INPUTS, "NEUTRAL ISR add failed: %s", esp_err_to_name(err));

@@ -38,7 +38,7 @@ idf.py -p COMx flash monitor
 
 Current behavior:
 
-- starts the gear safety task only
+- starts the shifter task and a placeholder CAN task
 - reads shift inputs from GPIO
 - rejects shifts that would leave the valid gear range
 - checks the encoder before commanding the ESC
@@ -48,21 +48,25 @@ Current behavior:
 - prints encoder position continuously while idle and during shift movement
 - has CAN/ECU safety checks removed for standalone testing
 
-Calibration constants live in:
+Production pin, timing, and calibration constants live in:
 
 ```text
-production_firmware/main/tasks/gear_safety_task/gear_safety_task.cpp
+production_firmware/main/config.hpp
 ```
 
 Current values:
 
 ```cpp
-static const float SHIFT_UP_TORQUE = 0.4f;
-static const float SHIFT_DOWN_TORQUE = -0.4f;
-static const uint16_t BASE_POSITION = 2502;
-static const uint16_t SHIFT_UP_STOP_POSITION = 2290;
-static const uint16_t SHIFT_DOWN_STOP_POSITION = 2670;
-static const uint16_t SHIFT_POSITION_TOLERANCE = 20;
+static constexpr float SHIFT_UP_TORQUE = 0.4f;
+static constexpr float SHIFT_DOWN_TORQUE = -0.4f;
+static constexpr float SHIFT_1_TO_NEUTRAL_TORQUE = SHIFT_UP_TORQUE;
+static constexpr float SHIFT_NEUTRAL_TO_1_TORQUE = SHIFT_DOWN_TORQUE;
+static constexpr uint16_t BASE_POSITION = 2502;
+static constexpr uint16_t SHIFT_UP_STOP_POSITION = 2290;
+static constexpr uint16_t SHIFT_DOWN_STOP_POSITION = 2670;
+static constexpr uint16_t SHIFT_1_TO_NEUTRAL_STOP_POSITION = BASE_POSITION;
+static constexpr uint16_t SHIFT_NEUTRAL_TO_1_STOP_POSITION = SHIFT_DOWN_STOP_POSITION;
+static constexpr uint16_t SHIFT_POSITION_TOLERANCE = 20;
 ```
 
 ## ESC Button Test
@@ -116,7 +120,3 @@ encoder_position_test_firmware/main/main.cpp
 | Shift up input | GPIO 45 |
 | Shift down input | GPIO 47 |
 | Shift neutral input | GPIO 48 |
-
-## Notes
-
-Generated ESP-IDF outputs such as `build/`, `sdkconfig`, `.bin`, `.elf`, and `.map` are ignored. Each project sets the ESP32-S3 target in its own `CMakeLists.txt`.

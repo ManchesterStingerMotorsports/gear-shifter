@@ -66,26 +66,6 @@
           ""
         ],
         [
-          "starved_thermal|100000000|110025000|2e27816b-0e2c-4aeb-bf00-1e49a7fa5d2f|d1e605d4-88e1-4a29-a480-abccd344c22a|B.Cu",
-          ""
-        ],
-        [
-          "starved_thermal|87500000|117900000|2e27816b-0e2c-4aeb-bf00-1e49a7fa5d2f|ed149901-02f9-47fd-b9e0-531ac0b2cc46|B.Cu",
-          ""
-        ],
-        [
-          "starved_thermal|88900000|116500000|2e27816b-0e2c-4aeb-bf00-1e49a7fa5d2f|1048ba78-c9a6-40ef-8d91-06b6561aca21|B.Cu",
-          ""
-        ],
-        [
-          "starved_thermal|88900000|119300000|2e27816b-0e2c-4aeb-bf00-1e49a7fa5d2f|8b6072f2-da7c-4fa1-8a66-e914e798e7bf|B.Cu",
-          ""
-        ],
-        [
-          "starved_thermal|90300000|117900000|2e27816b-0e2c-4aeb-bf00-1e49a7fa5d2f|32bd6c71-6de6-41a4-8152-abbe7e6434f2|B.Cu",
-          ""
-        ],
-        [
           "text_height|116400000|114350000|bbfcb8a1-19a2-42e0-a83b-4d4f350af74d|00000000-0000-0000-0000-000000000000",
           ""
         ],
@@ -692,16 +672,16 @@
       {
         "filename": "Shifter.kicad_sch",
         "name": "Shifter",
-        "uuid": "00000000-0000-0000-0000-000000000000"
+        "uuid": "a5562847-47a1-4bc8-b4f9-fac642f36aa8"
       }
     ],
-    "used_designators": "",
+    "used_designators": "R9",
     "variants": []
   },
   "sheets": [
     [
       "a5562847-47a1-4bc8-b4f9-fac642f36aa8",
-      "Root"
+      "Shifter"
     ]
   ],
   "text_variables": {},

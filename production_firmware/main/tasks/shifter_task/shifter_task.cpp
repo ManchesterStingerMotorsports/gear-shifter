@@ -33,6 +33,7 @@ enum class ShiftSafetyStatus
     InvalidRequest,
     OutOfRange,
     NeutralUnavailable,
+    CanUnavailable,
     EncoderFault,
 };
 
@@ -116,6 +117,8 @@ static const char *shift_safety_status_to_string(ShiftSafetyStatus status)
         return "shift would exceed gearbox range";
     case ShiftSafetyStatus::NeutralUnavailable:
         return "neutral is only available from 1st";
+    case ShiftSafetyStatus::CanUnavailable:
+        return "CAN safety data unavailable";
     case ShiftSafetyStatus::EncoderFault:
         return "encoder pre-check failed";
     default:
@@ -271,47 +274,88 @@ static Gear gear_after_successful_shift(ShiftRequest request, Gear gear_count)
     }
 }
 
+static int8_t gear_to_can_value(Gear gear)
+{
+    return static_cast<int8_t>(gear);
+}
+
+static void publish_shifter_can_status(Gear gear_count,
+                                       ShifterCanStatus status,
+                                       ShiftRequest last_request)
+{
+    set_shifter_task_can_status({
+        gear_to_can_value(gear_count),
+        static_cast<uint8_t>(status),
+        static_cast<uint8_t>(last_request),
+    });
+}
+
+static void sync_gear_count_from_can(Gear &gear_count)
+{
+    if (config::STANDALONE_TESTING)
+    {
+        return;
+    }
+
+    const CanTaskOutput can_output = get_can_task_output();
+    if (can_output.switches_valid && can_output.neutral_pos)
+    {
+        if (gear_count != GEAR_N)
+        {
+            ESP_LOGI(TAG_SHIFTER,
+                     "Synced gear from neutral sensor: previous=%s gear=N",
+                     gear_to_string(gear_count));
+        }
+        gear_count = GEAR_N;
+        return;
+    }
+
+    if (!can_output.speed_gear_valid || !can_output.is_moving)
+    {
+        return;
+    }
+
+    Gear ecu_gear = gear_count;
+    if (ecu_gear_to_gear(can_output.ecu_gear, ecu_gear))
+    {
+        if (gear_count != ecu_gear)
+        {
+            ESP_LOGI(TAG_SHIFTER,
+                     "Synced gear from ECU: previous=%s ecu_gear=%s",
+                     gear_to_string(gear_count),
+                     gear_to_string(ecu_gear));
+        }
+        gear_count = ecu_gear;
+    }
+    else
+    {
+        ESP_LOGW(TAG_SHIFTER,
+                 "Ignoring invalid ECU gear: ecu_gear=%d",
+                 static_cast<int>(can_output.ecu_gear));
+    }
+}
+
+static bool can_safety_data_available()
+{
+    if (config::STANDALONE_TESTING)
+    {
+        return true;
+    }
+
+    const CanTaskOutput can_output = get_can_task_output();
+    return can_output.speed_gear_valid && can_output.switches_valid;
+}
+
 static void process_shift_request(ShiftRequest request, Gear &gear_count, AMT20 &encoder, ESC &esc)
 {
     ESP_LOGI(TAG_SHIFTER, "Shift request accepted: %s", shift_request_to_string(request));
 
-    if (!config::STANDALONE_TESTING)
-    {
-        const CanTaskOutput can_output = get_can_task_output();
-        if (can_output.neutral_pos)
-        {
-            if (gear_count != GEAR_N)
-            {
-                ESP_LOGI(TAG_SHIFTER,
-                         "Pre-check synced gear from neutral sensor: previous=%s gear=N",
-                         gear_to_string(gear_count));
-            }
-            gear_count = GEAR_N;
-        }
-        else if (can_output.is_moving)
-        {
-            Gear ecu_gear = gear_count;
-            if (ecu_gear_to_gear(can_output.ecu_gear, ecu_gear))
-            {
-                if (gear_count != ecu_gear)
-                {
-                    ESP_LOGI(TAG_SHIFTER,
-                             "Pre-check synced gear from ECU: previous=%s ecu_gear=%s",
-                             gear_to_string(gear_count),
-                             gear_to_string(ecu_gear));
-                }
-                gear_count = ecu_gear;
-            }
-            else
-            {
-                ESP_LOGW(TAG_SHIFTER,
-                         "Ignoring invalid ECU gear during pre-check: ecu_gear=%d",
-                         static_cast<int>(can_output.ecu_gear));
-            }
-        }
-    }
+    sync_gear_count_from_can(gear_count);
+    publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_SHIFTING, request);
 
-    ShiftSafetyStatus safety_status = shift_request_safety_status(request, gear_count);
+    ShiftSafetyStatus safety_status = can_safety_data_available()
+                                          ? shift_request_safety_status(request, gear_count)
+                                          : ShiftSafetyStatus::CanUnavailable;
     if (safety_status == ShiftSafetyStatus::Allowed &&
         !read_encoder_before_shift(request, gear_count, encoder))
     {
@@ -326,6 +370,7 @@ static void process_shift_request(ShiftRequest request, Gear &gear_count, AMT20 
                  gear_to_string(gear_count),
                  shift_safety_status_to_string(safety_status));
         esc.set_torque(0.0f);
+        publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_REJECTED, request);
         ESP_LOGI(TAG_SHIFTER, "ESC neutral command sent: shift rejected");
         return;
     }
@@ -377,16 +422,19 @@ static void process_shift_request(ShiftRequest request, Gear &gear_count, AMT20 
         ESP_LOGI(TAG_SHIFTER,
                  "Internal gear count updated after successful shift: gear=%s",
                  gear_to_string(gear_count));
+        publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_SHIFT_COMPLETE, request);
     }
     else if (encoder_fault)
     {
         ESP_LOGE(TAG_SHIFTER,
                  "Shift aborted due to encoder read fault: %s",
                  shift_request_to_string(request));
+        publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_ENCODER_FAULT, request);
     }
     else
     {
         ESP_LOGE(TAG_SHIFTER, "Shift timed out: %s", shift_request_to_string(request));
+        publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_SHIFT_TIMEOUT, request);
     }
 }
 
@@ -404,6 +452,7 @@ void shifter_task(void *arg)
 
     // Internal software gear count. On startup this should always be neutral.
     Gear gear_count = GEAR_N;
+    publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_IDLE, SHIFT_REQUEST_NONE);
 
     // Constructor already sends neutral, but be explicit at startup.
     esc.set_torque(0.0f);
@@ -414,6 +463,7 @@ void shifter_task(void *arg)
     {
         ESP_LOGE(TAG_SHIFTER, "Shift input setup failed: %s", esp_err_to_name(err));
         esc.set_torque(0.0f);
+        publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_INPUT_FAULT, SHIFT_REQUEST_NONE);
         ESP_LOGI(TAG_SHIFTER, "ESC neutral command sent: shift input setup failed");
         taskDISABLE_INTERRUPTS();
         for (;;);
@@ -425,6 +475,9 @@ void shifter_task(void *arg)
         // input ISR latches a shift request.
         if (ulTaskNotifyTake(pdTRUE, config::ENCODER_IDLE_LOG_INTERVAL) == 0)
         {
+            sync_gear_count_from_can(gear_count);
+            publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_IDLE, SHIFT_REQUEST_NONE);
+
             uint16_t position = 0;
             if (encoder.read_position(position))
             {
@@ -444,6 +497,7 @@ void shifter_task(void *arg)
         if (request == SHIFT_REQUEST_NONE)
         {
             ESP_LOGW(TAG_SHIFTER, "Task woke without a pending shift request");
+            publish_shifter_can_status(gear_count, SHIFTER_CAN_STATUS_IDLE, SHIFT_REQUEST_NONE);
             clear_and_enable_shift_inputs();
             continue;
         }

@@ -10,7 +10,7 @@
 
 namespace config
 {
-static constexpr bool STANDALONE_TESTING = true;
+static constexpr bool STANDALONE_TESTING = false;
 
 // Keep control-path tasks on one core so priority, not cross-core scheduling,
 // decides what can run during the shift actuation window.
@@ -33,6 +33,9 @@ static constexpr gpio_num_t ENCODER_MISO_GPIO = GPIO_NUM_13;
 static constexpr gpio_num_t SHIFT_UP_GPIO = GPIO_NUM_47;
 static constexpr gpio_num_t SHIFT_DOWN_GPIO = GPIO_NUM_45;
 static constexpr gpio_num_t SHIFT_NEUTRAL_GPIO = GPIO_NUM_48;
+
+static constexpr gpio_num_t CAN_RX_GPIO = GPIO_NUM_2;
+static constexpr gpio_num_t CAN_TX_GPIO = GPIO_NUM_1;
 
 static constexpr uint32_t SHIFT_INPUT_RELEASE_DEBOUNCE_MS = 30;
 static constexpr uint32_t SHIFT_INPUT_RELEASE_POLL_MS = 1;

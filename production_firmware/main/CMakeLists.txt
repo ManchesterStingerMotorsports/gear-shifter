@@ -4,7 +4,7 @@ idf_component_register(
         "encoder/AMT20.cpp"
         "esc/ESC.cpp"
         "interrupts/shift_inputs.cpp"
-        "tasks/can_task/can_status.cpp"
+        "tasks/can_task/MSM_CAN.cpp"
         "tasks/can_task/can_task.cpp"
         "tasks/shifter_task/shifter_task.cpp"
     PRIV_REQUIRES
@@ -14,6 +14,7 @@ idf_component_register(
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi
+        esp_driver_twai
         esp_timer
     INCLUDE_DIRS
         "."

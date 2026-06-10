@@ -2,7 +2,7 @@
 
 #include "AMT20.hpp"
 #include "ESC.hpp"
-#include "can_status.hpp"
+#include "can_task.hpp"
 #include "config.hpp"
 #include "shift_inputs.hpp"
 

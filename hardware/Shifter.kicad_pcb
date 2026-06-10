@@ -147,7 +147,7 @@
 			(mirror no)
 			(drillshape 0)
 			(scaleselection 1)
-			(outputdirectory "../../../../../../Downloads/ShifterV1.3")
+			(outputdirectory "C:/Users/james/Downloads/0906 pcbs/")
 		)
 	)
 	(footprint "LED_SMD:LED_0603_1608Metric"

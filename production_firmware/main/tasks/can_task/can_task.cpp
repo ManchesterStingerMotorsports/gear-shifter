@@ -17,7 +17,7 @@ static const char *TAG_CAN_TASK = "CAN_TASK";
 
 static constexpr uint16_t HALTECH_ID_SPEED_GEAR = 0x370;
 static constexpr uint16_t HALTECH_ID_SWITCHES = 0x3E4;
-static constexpr uint16_t SHIFTER_STATUS_TX_ID = 0x500;
+static constexpr uint16_t SHIFTER_STATUS_TX_ID = 0x100;
 
 static constexpr uint32_t CAN_POLL_INTERVAL_MS = 20;
 static constexpr uint32_t SHIFTER_STATUS_TX_PERIOD_MS = 50;

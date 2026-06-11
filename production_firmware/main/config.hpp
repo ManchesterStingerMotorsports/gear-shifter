@@ -12,9 +12,10 @@ namespace config
 {
 static constexpr bool STANDALONE_TESTING = false;
 
-// Keep control-path tasks on one core so priority, not cross-core scheduling,
-// decides what can run during the shift actuation window.
+// Keep the shifter actuation path on one core so priority, not cross-core
+// scheduling, decides what can run during the shift actuation window.
 static const BaseType_t CONTROL_CORE = 1;
+static const BaseType_t CAN_CORE = 0;
 
 static const UBaseType_t SHIFTER_TASK_PRIORITY = configMAX_PRIORITIES - 1;
 static const UBaseType_t CAN_TASK_PRIORITY = configMAX_PRIORITIES - 2;

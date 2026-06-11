@@ -78,7 +78,7 @@ extern "C" void app_main(void)
                                  nullptr,
                                  config::CAN_TASK_PRIORITY,
                                  nullptr,
-                                 config::CONTROL_CORE);
+                                 config::CAN_CORE);
     if(ok != pdPASS){success = false;}
     
     // If task creation fails, the controller is in an unknown/partial startup

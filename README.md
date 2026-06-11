@@ -7,6 +7,7 @@ The repository now contains three standalone ESP32-S3 projects:
 ```text
 gear-shifter/
   production_firmware/             Production shifter firmware
+  can_test_firmware/                Bench test: CAN/TWAI test scaffold
   esc_button_test_firmware/        Bench test: buttons command ESC torque
   encoder_position_test_firmware/  Bench test: print AMT20 encoder position
   Hardware/                        KiCad hardware files
@@ -124,6 +125,25 @@ Constants live in:
 encoder_position_test_firmware/main/main.cpp
 ```
 
+## CAN Test
+
+Project folder:
+
+```text
+can_test_firmware/
+```
+
+Behavior:
+
+- intentionally blank scaffold for CAN/TWAI bench testing
+- builds with the same reusable `MSM_CAN` helper used by production firmware
+
+Constants and test logic can be added in:
+
+```text
+can_test_firmware/main/main.cpp
+```
+
 ## Pin Map
 
 | Function | ESP32-S3 GPIO |
@@ -136,3 +156,5 @@ encoder_position_test_firmware/main/main.cpp
 | Shift up input | GPIO 47 |
 | Shift down input | GPIO 45 |
 | Shift neutral input | GPIO 48 |
+| CAN RX | GPIO 2 |
+| CAN TX | GPIO 1 |

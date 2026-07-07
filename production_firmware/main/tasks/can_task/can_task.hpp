@@ -36,4 +36,7 @@ void set_can_task_output(const CanTaskOutput &output);
 ShifterTaskCanStatus get_shifter_task_can_status();
 void set_shifter_task_can_status(const ShifterTaskCanStatus &status);
 
+void suspend_can_tasks_for_shift();
+void resume_can_tasks_after_shift();
+
 void can_task(void *arg);

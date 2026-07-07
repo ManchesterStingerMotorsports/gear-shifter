@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "can_task.cpp"
         "../../production_firmware/main/tasks/can_task/MSM_CAN.cpp"
     PRIV_REQUIRES
         freertos

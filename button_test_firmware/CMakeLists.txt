@@ -6,4 +6,4 @@ set(IDF_TARGET esp32s3)
 set(COMPONENTS main)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esc_button_test)
+project(button_test)

@@ -84,6 +84,9 @@ namespace MSM_CAN
     static QueueHandle_t g_rx_queue = nullptr;
     static QueueHandle_t g_tx_cmd_queue = nullptr;
 
+    static TaskHandle_t g_rx_task_handle = nullptr;
+    static TaskHandle_t g_tx_task_handle = nullptr;
+
     static SemaphoreHandle_t g_subs_mutex = nullptr;
     static SemaphoreHandle_t g_sched_mutex = nullptr;
 
@@ -723,7 +726,7 @@ namespace MSM_CAN
             RX_TASK_STACK,
             nullptr,
             tskIDLE_PRIORITY + 1,
-            nullptr,
+            &g_rx_task_handle,
             task_core_id);
 
         if (rx_task_ok != pdPASS)
@@ -740,7 +743,7 @@ namespace MSM_CAN
             TX_TASK_STACK,
             nullptr,
             tskIDLE_PRIORITY + 1,
-            nullptr,
+            &g_tx_task_handle,
             task_core_id);
 
         if (tx_task_ok != pdPASS)
@@ -965,6 +968,32 @@ namespace MSM_CAN
                 
         xSemaphoreGive(g_subs_mutex);
         return ESP_OK;
+    }
+
+    void suspend_background_tasks()
+    {
+        if (g_rx_task_handle != nullptr)
+        {
+            vTaskSuspend(g_rx_task_handle);
+        }
+
+        if (g_tx_task_handle != nullptr)
+        {
+            vTaskSuspend(g_tx_task_handle);
+        }
+    }
+
+    void resume_background_tasks()
+    {
+        if (g_tx_task_handle != nullptr)
+        {
+            vTaskResume(g_tx_task_handle);
+        }
+
+        if (g_rx_task_handle != nullptr)
+        {
+            vTaskResume(g_rx_task_handle);
+        }
     }
 
 }

@@ -48,7 +48,6 @@ Some of the important safety checks are:
 #include "freertos/task.h" 
 
 #include "config.hpp"
-#include "can_task.hpp"
 #include "shifter_task.hpp"
 
 //Logging is seperated by tags
@@ -70,15 +69,6 @@ extern "C" void app_main(void)
                                  config::SHIFTER_TASK_PRIORITY,
                                  nullptr,
                                  config::CONTROL_CORE);
-    if(ok != pdPASS){success = false;}
-
-    ok = xTaskCreatePinnedToCore(can_task,
-                                 "can_task",
-                                 config::CAN_TASK_STACK_WORDS,
-                                 nullptr,
-                                 config::CAN_TASK_PRIORITY,
-                                 nullptr,
-                                 config::CAN_CORE);
     if(ok != pdPASS){success = false;}
     
     // If task creation fails, the controller is in an unknown/partial startup

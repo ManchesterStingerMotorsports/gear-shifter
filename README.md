@@ -2,13 +2,13 @@
 
 ESP-IDF firmware and bench-test projects for the Manchester Stinger Motorsports electronic gear shifter controller.
 
-The repository now contains three standalone ESP32-S3 projects:
+The repository now contains four standalone ESP32-S3 projects:
 
 ```text
 gear-shifter/
   production_firmware/             Production shifter firmware
   can_test_firmware/                Bench test: CAN/TWAI test scaffold
-  esc_button_test_firmware/        Bench test: buttons command ESC torque
+  button_test_firmware/            Bench test: buttons, LEDs, and low ESC torque
   encoder_position_test_firmware/  Bench test: print AMT20 encoder position
   Hardware/                        KiCad hardware files
   ESC Settings/                    ESC configuration files
@@ -74,36 +74,42 @@ Current values:
 
 ```cpp
 static constexpr bool STANDALONE_TESTING = true;
+static constexpr int8_t STANDALONE_INITIAL_GEAR = 2;
 static constexpr float SHIFT_UP_TORQUE = 0.4f;
 static constexpr float SHIFT_DOWN_TORQUE = -0.4f;
 static constexpr float SHIFT_1_TO_NEUTRAL_TORQUE = SHIFT_UP_TORQUE;
 static constexpr float SHIFT_NEUTRAL_TO_1_TORQUE = SHIFT_DOWN_TORQUE;
-static constexpr uint16_t BASE_POSITION = 2502;
-static constexpr uint16_t SHIFT_UP_STOP_POSITION = 2290;
-static constexpr uint16_t SHIFT_DOWN_STOP_POSITION = 2670;
+static constexpr uint16_t BASE_POSITION = 2840;
+static constexpr uint16_t SHIFT_UP_STOP_POSITION = 2639;
+static constexpr uint16_t SHIFT_DOWN_STOP_POSITION = 3039;
 static constexpr uint16_t SHIFT_1_TO_NEUTRAL_STOP_POSITION = BASE_POSITION;
 static constexpr uint16_t SHIFT_NEUTRAL_TO_1_STOP_POSITION = SHIFT_DOWN_STOP_POSITION;
 static constexpr uint16_t SHIFT_POSITION_TOLERANCE = 20;
 ```
 
-## ESC Button Test
+## Button And ESC Test
 
 Project folder:
 
 ```text
-esc_button_test_firmware/
+button_test_firmware/
 ```
 
 Behavior:
 
-- hold UP to command positive test torque
-- hold DOWN to command negative test torque
-- release both buttons to send neutral torque
+- reads UP, DOWN, and NEUTRAL as active-low inputs
+- high impedance reads as released using the internal pull-up
+- GND reads as pressed
+- prints the button state to serial whenever it changes
+- mirrors the debounced button states on the UP, DOWN, and NEUTRAL LEDs
+- commands low positive ESC torque while UP is pressed
+- commands low negative ESC torque while DOWN is pressed
+- sends neutral ESC torque when neither or both shift directions are pressed
 
 Constants live in:
 
 ```text
-esc_button_test_firmware/main/main.cpp
+button_test_firmware/main/main.cpp
 ```
 
 ## Encoder Position Test
@@ -153,8 +159,11 @@ can_test_firmware/main/main.cpp
 | Encoder MOSI | GPIO 11 |
 | Encoder SCLK | GPIO 12 |
 | Encoder MISO | GPIO 13 |
-| Shift up input | GPIO 47 |
+| Shift up input | GPIO 48 |
 | Shift down input | GPIO 45 |
-| Shift neutral input | GPIO 48 |
+| Shift neutral input | GPIO 47 |
+| Shift up LED | GPIO 7 |
+| Shift down LED | GPIO 6 |
+| Shift neutral LED | GPIO 5 |
 | CAN RX | GPIO 2 |
 | CAN TX | GPIO 1 |

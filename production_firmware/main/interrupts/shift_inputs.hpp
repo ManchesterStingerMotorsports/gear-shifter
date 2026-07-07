@@ -10,7 +10,6 @@ enum ShiftRequest
     SHIFT_REQUEST_NONE = 0,
     SHIFT_REQUEST_UP,
     SHIFT_REQUEST_DOWN,
-    SHIFT_REQUEST_NEUTRAL,
 };
 
 // Configure the shift input GPIOs and register their ISRs.
@@ -24,4 +23,3 @@ void clear_and_enable_shift_inputs();
 
 void shift_up_isr(void *arg);
 void shift_down_isr(void *arg);
-void shift_neutral_isr(void *arg);

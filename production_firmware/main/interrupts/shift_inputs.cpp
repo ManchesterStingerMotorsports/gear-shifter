@@ -36,21 +36,18 @@ static void disable_shift_input_interrupts()
 {
     gpio_intr_disable(config::SHIFT_UP_GPIO);
     gpio_intr_disable(config::SHIFT_DOWN_GPIO);
-    gpio_intr_disable(config::SHIFT_NEUTRAL_GPIO);
 }
 
 static void enable_shift_input_interrupts()
 {
     gpio_intr_enable(config::SHIFT_UP_GPIO);
     gpio_intr_enable(config::SHIFT_DOWN_GPIO);
-    gpio_intr_enable(config::SHIFT_NEUTRAL_GPIO);
 }
 
 static bool shift_inputs_released()
 {
-    return gpio_get_level(config::SHIFT_UP_GPIO) == 0 &&
-           gpio_get_level(config::SHIFT_DOWN_GPIO) == 0 &&
-           gpio_get_level(config::SHIFT_NEUTRAL_GPIO) == 0;
+    return gpio_get_level(config::SHIFT_UP_GPIO) != 0 &&
+           gpio_get_level(config::SHIFT_DOWN_GPIO) != 0;
 }
 
 static void wait_for_shift_inputs_released()
@@ -128,12 +125,6 @@ void IRAM_ATTR shift_down_isr(void *arg)
     shift_input_isr(SHIFT_REQUEST_DOWN);
 }
 
-void IRAM_ATTR shift_neutral_isr(void *arg)
-{
-    (void)arg;
-    shift_input_isr(SHIFT_REQUEST_NEUTRAL);
-}
-
 ShiftRequest consume_pending_shift_request()
 {
     ShiftRequest request = SHIFT_REQUEST_NONE;
@@ -170,12 +161,11 @@ esp_err_t setup_shift_inputs(TaskHandle_t task_handle)
     gpio_config_t shift_input_config = {};
     shift_input_config.pin_bit_mask =
         gpio_select(config::SHIFT_UP_GPIO) |
-        gpio_select(config::SHIFT_DOWN_GPIO) |
-        gpio_select(config::SHIFT_NEUTRAL_GPIO);
+        gpio_select(config::SHIFT_DOWN_GPIO);
     shift_input_config.mode = GPIO_MODE_INPUT;
-    shift_input_config.pull_up_en = GPIO_PULLUP_DISABLE;
-    shift_input_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
-    shift_input_config.intr_type = GPIO_INTR_POSEDGE;
+    shift_input_config.pull_up_en = GPIO_PULLUP_ENABLE;
+    shift_input_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    shift_input_config.intr_type = GPIO_INTR_NEGEDGE;
 
     esp_err_t err = gpio_config(&shift_input_config);
     if (err != ESP_OK)
@@ -206,13 +196,6 @@ esp_err_t setup_shift_inputs(TaskHandle_t task_handle)
         return err;
     }
 
-    err = gpio_isr_handler_add(config::SHIFT_NEUTRAL_GPIO, shift_neutral_isr, nullptr);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG_SHIFT_INPUTS, "NEUTRAL ISR add failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    ESP_LOGI(TAG_SHIFT_INPUTS, "Shift inputs configured on IO45, IO47, IO48");
+    ESP_LOGI(TAG_SHIFT_INPUTS, "Shift inputs configured on IO45 and IO47; neutral ignored");
     return ESP_OK;
 }

@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.cpp"
+        "ESC.cpp"
     PRIV_REQUIRES
         freertos
         log

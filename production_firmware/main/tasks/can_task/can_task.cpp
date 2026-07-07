@@ -31,6 +31,7 @@ static portMUX_TYPE shifter_task_status_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static CanTaskOutput can_task_output = {false, 0, false, false, false};
 static ShifterTaskCanStatus shifter_task_status = {0, SHIFTER_CAN_STATUS_STARTUP, 0};
+static TaskHandle_t can_task_handle = nullptr;
 
 CanTaskOutput get_can_task_output()
 {
@@ -66,6 +67,26 @@ void set_shifter_task_can_status(const ShifterTaskCanStatus &status)
     portENTER_CRITICAL(&shifter_task_status_mux);
     shifter_task_status = status;
     portEXIT_CRITICAL(&shifter_task_status_mux);
+}
+
+void suspend_can_tasks_for_shift()
+{
+    if (can_task_handle != nullptr)
+    {
+        vTaskSuspend(can_task_handle);
+    }
+
+    MSM_CAN::suspend_background_tasks();
+}
+
+void resume_can_tasks_after_shift()
+{
+    MSM_CAN::resume_background_tasks();
+
+    if (can_task_handle != nullptr)
+    {
+        vTaskResume(can_task_handle);
+    }
 }
 
 static uint32_t now_ms()
@@ -186,6 +207,7 @@ static MSM_CAN::TxFrame build_shifter_status_frame()
 void can_task(void *arg)
 {
     (void)arg;
+    can_task_handle = xTaskGetCurrentTaskHandle();
 
     ESP_LOGI(TAG_CAN_TASK, "CAN task started");
     set_can_task_output({false, 0, false, false, false});

@@ -1,11 +1,8 @@
 idf_component_register(
     SRCS
         "main.cpp"
-        "encoder/AMT20.cpp"
         "esc/ESC.cpp"
         "interrupts/shift_inputs.cpp"
-        "tasks/can_task/MSM_CAN.cpp"
-        "tasks/can_task/can_task.cpp"
         "tasks/shifter_task/shifter_task.cpp"
     PRIV_REQUIRES
         freertos
@@ -13,14 +10,9 @@ idf_component_register(
         spi_flash
         esp_driver_gpio
         esp_driver_ledc
-        esp_driver_spi
-        esp_driver_twai
-        esp_timer
     INCLUDE_DIRS
         "."
-        "encoder"
         "esc"
         "interrupts"
-        "tasks/can_task"
         "tasks/shifter_task"
 )

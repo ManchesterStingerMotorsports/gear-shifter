@@ -55,6 +55,9 @@ namespace MSM_CAN
     
     esp_err_t get(uint16_t id, RxFrame& frame);
 
+    void suspend_background_tasks();
+    void resume_background_tasks();
+
     void set_hardware_filters();
     void set_hardware_filters(uint32_t id);
     void set_hardware_filters(uint32_t low, uint32_t high);

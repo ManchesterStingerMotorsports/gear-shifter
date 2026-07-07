@@ -40,5 +40,6 @@ private:
 
     static constexpr int SPI_CLOCK_HZ = 1000 * 1000;
     static constexpr int MAX_WAIT_BYTES = 8;
+    static constexpr uint32_t INTER_BYTE_DELAY_US = 20;
     static constexpr int64_t MIN_READ_SPACING_US = 20;
 };

@@ -40,9 +40,14 @@ bool AMT20::read_position(uint16_t &position)
         return false;
     }
 
-    bool acknowledged = false;
+    bool acknowledged = rx == READ_POSITION;
     for (int i = 0; i < MAX_WAIT_BYTES; ++i)
     {
+        if (acknowledged)
+        {
+            break;
+        }
+
         if (!transfer_byte(NOP, rx))
         {
             return false;
@@ -56,14 +61,12 @@ bool AMT20::read_position(uint16_t &position)
 
         if (rx != WAIT)
         {
-            ESP_LOGW(TAG_AMT20, "Unexpected response while reading position: 0x%02X", rx);
             return false;
         }
     }
 
     if (!acknowledged)
     {
-        ESP_LOGW(TAG_AMT20, "Timed out waiting for read-position acknowledgement");
         return false;
     }
 
@@ -146,5 +149,6 @@ bool AMT20::transfer_byte(uint8_t tx, uint8_t &rx)
         return false;
     }
 
+    esp_rom_delay_us(INTER_BYTE_DELAY_US);
     return true;
 }

@@ -53,10 +53,10 @@ private:
     static constexpr uint32_t PWM_FREQ_HZ = 60;
     static constexpr float PWM_PERIOD_US = 1000000.0f / PWM_FREQ_HZ;
 
-    // Calibrated pulse widths. Tune these after bench testing.
-    static constexpr float FULL_REVERSE_US = 1048.0f;
+    // Command pulse widths. Tune these after bench testing.
+    static constexpr float FULL_REVERSE_US = 800.0f;
     static constexpr float NEUTRAL_US = 1479.0f;
-    static constexpr float FULL_FORWARD_US = 1910.0f;
+    static constexpr float FULL_FORWARD_US = 2115.0f;
 
     static uint32_t pulse_us_to_duty(float pulse_us);
 };
